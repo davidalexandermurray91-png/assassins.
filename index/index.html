@@ -1,1 +1,956 @@
-<h1>Hello</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ASSASSINS</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+    }
+    canvas { display: block; border: 2px solid #333; }
+  </style>
+</head>
+<body>
+<canvas id="c" width="800" height="600"></canvas>
+<script>
+// =====================================================
+// ASSASSINS - A Hotel Survival Game
+// =====================================================
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+// ---------- CONSTANTS ----------
+const W = 800, H = 600;
+const TILE = 32;
+const COLS = 25, ROWS = 18;
+const GAME_H = ROWS * TILE;   // 576 – game area height
+const HUD_H  = H - GAME_H;    // 24 – bottom bar height
+const DAY_DUR   = 60;          // seconds
+const NIGHT_DUR = 90;          // seconds
+
+// ---------- TILE MAP ----------
+// W = solid wall   . = walkable floor   D = doorway (floor tile)
+// Layout: 25 cols x 18 rows  @ 32 px each = 800 x 576
+//   Cols: 0=OWall  1-7=Room1  8=InnerWall  9-15=Room2  16=InnerWall  17-23=Room3  24=OWall
+//   Rows: 0=TopWall  1-4=TopRooms  5=DoorRow  6-7=Hallway
+//         8=DoorRow  9-12=BotRooms  13-16=Lobby  17=BotWall
+const MAP = [
+  "WWWWWWWWWWWWWWWWWWWWWWWWW", // 0  top wall
+  "W.......W.......W.......W", // 1  top rooms
+  "W.......W.......W.......W", // 2
+  "W.......W.......W.......W", // 3  (hiding spots placed here)
+  "W.......W.......W.......W", // 4
+  "WWWWDWWWWWWWDWWWWWWWDWWWW", // 5  door row  (D @ col 4, 12, 20)
+  "W.......................W", // 6  central hallway
+  "W.......................W", // 7  central hallway
+  "WWWWDWWWWWWWDWWWWWWWDWWWW", // 8  door row
+  "W.......W.......W.......W", // 9  bottom rooms
+  "W.......W.......W.......W", // 10
+  "W.......W.......W.......W", // 11 (hiding spots placed here)
+  "W.......W.......W.......W", // 12
+  "W.......................W", // 13 open corridor → lobby
+  "W.......................W", // 14 lobby
+  "W.......................W", // 15 lobby  (shop & workers here)
+  "W.......................W", // 16 lobby
+  "WWWWWWWWWWWWWWWWWWWWWWWWW", // 17 bottom wall
+];
+
+// Sanity check rows are 25 chars
+// MAP.forEach((r,i)=>{ if(r.length!==25) console.warn('row',i,'len',r.length); });
+
+function tileWall(col, row) {
+  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return true;
+  return MAP[row][col] === 'W';
+}
+function mapCollide(x, y, w, h) {
+  const c1 = Math.floor(x / TILE),         c2 = Math.floor((x + w - 1) / TILE);
+  const r1 = Math.floor(y / TILE),         r2 = Math.floor((y + h - 1) / TILE);
+  for (let r = r1; r <= r2; r++)
+    for (let c = c1; c <= c2; c++)
+      if (tileWall(c, r)) return true;
+  return false;
+}
+
+// ---------- INPUT ----------
+const keys = {}, kDown = {}, kUp = {};
+document.addEventListener('keydown', e => {
+  if (!keys[e.code]) kDown[e.code] = true;
+  keys[e.code] = true;
+  // prevent scroll on game keys
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))
+    e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; kUp[e.code] = true; });
+function pressed(c)  { const v = kDown[c]; delete kDown[c]; return !!v; }
+function held(c)     { return !!keys[c]; }
+
+// Mouse click for title start button
+let mouseClick = null;
+canvas.addEventListener('click', e => {
+  const r = canvas.getBoundingClientRect();
+  mouseClick = { x: e.clientX - r.left, y: e.clientY - r.top };
+});
+
+// ---------- STATIC OBJECTS ----------
+const swordShop = { x: 80, y: 430, w: 70, h: 44 };
+
+// Hiding spots (dark closets, 1 per room, top & bottom)
+const hidingSpots = [
+  { x: 48, y: 48,  w: 40, h: 28 }, // room1-top
+  { x: 320, y: 48,  w: 40, h: 28 }, // room2-top
+  { x: 592, y: 48,  w: 40, h: 28 }, // room3-top
+  { x: 48, y: 310, w: 40, h: 28 }, // room1-bot
+  { x: 320, y: 310, w: 40, h: 28 }, // room2-bot
+  { x: 592, y: 310, w: 40, h: 28 }, // room3-bot
+];
+
+// Hotel workers (green NPCs in lobby)
+const workers = [
+  { x: 540, y: 448, w: 20, h: 20, cooldown: 0, flash: 0 },
+  { x: 600, y: 448, w: 20, h: 20, cooldown: 0, flash: 0 },
+  { x: 660, y: 448, w: 20, h: 20, cooldown: 0, flash: 0 },
+];
+
+// ---------- ENTITIES ----------
+const player = {
+  x: 370, y: 448,
+  w: 24,  h: 24,
+  hp: 5,  maxHp: 5,
+  speed: 3,
+  facingX: 1, facingY: 0,
+  attackTimer: 0,
+  attackCooldown: 0,
+  isJumping: false,
+  jumpTimer: 0,
+  invincible: 0,
+  isRunning: false,
+};
+
+const companion = {
+  x: 410, y: 448,
+  w: 18,  h: 18,
+  speed: 2.5,
+  state: 'follow', // 'follow' | 'distract'
+};
+
+const doctor = {
+  x: 200, y: 448,
+  w: 18,  h: 18,
+  visible: false,
+  dialog: '',
+  dialogTimer: 0,
+};
+
+// ---------- ASSASSIN CLASS ----------
+class Assassin {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.w = 20; this.h = 20;
+    this.hp = 3; this.maxHp = 3;
+    this.baseSpeed = 1.4;
+    this.state = 'patrol'; // patrol | chase | telegraph | stunned
+    this.stunTimer = 0;
+    this.telegraphTimer = 0;
+    this.attackCooldown = 0;
+    this.patrolDX = (Math.random() > .5) ? 1 : -1;
+    this.patrolDY = 0;
+    this.patrolTimer = 60 + Math.random() * 80;
+    this.alive = true;
+    this.distracted = false;
+  }
+
+  moveToward(tx, ty, speed) {
+    const dx = tx - (this.x + this.w / 2);
+    const dy = ty - (this.y + this.h / 2);
+    const d  = Math.sqrt(dx * dx + dy * dy);
+    if (d < 1) return;
+    const nx = dx / d, ny = dy / d;
+    const mx = nx * speed, my = ny * speed;
+    // Try full move, then axis-aligned wall-slide fallbacks using the same step size
+    const slideStep = speed * 0.5;
+    if (!mapCollide(this.x + mx, this.y, this.w, this.h))                this.x += mx;
+    else if (!mapCollide(this.x + (mx > 0 ? slideStep : -slideStep), this.y, this.w, this.h)) this.x += (mx > 0 ? slideStep : -slideStep);
+    if (!mapCollide(this.x, this.y + my, this.w, this.h))                this.y += my;
+    else if (!mapCollide(this.x, this.y + (my > 0 ? slideStep : -slideStep), this.w, this.h)) this.y += (my > 0 ? slideStep : -slideStep);
+    // Perpendicular nudge if fully stuck
+    if (mapCollide(this.x + mx, this.y, this.w, this.h) && mapCollide(this.x, this.y + my, this.w, this.h)) {
+      const px1 = -ny * speed, py1 = nx * speed;
+      const px2 =  ny * speed, py2 = -nx * speed;
+      if (!mapCollide(this.x + px1, this.y + py1, this.w, this.h)) { this.x += px1; this.y += py1; }
+      else if (!mapCollide(this.x + px2, this.y + py2, this.w, this.h)) { this.x += px2; this.y += py2; }
+    }
+  }
+
+  patrol(dt) {
+    this.state = 'patrol';
+    this.patrolTimer -= dt * 60;
+    if (this.patrolTimer <= 0) {
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      const d = dirs[Math.floor(Math.random() * 4)];
+      this.patrolDX = d[0]; this.patrolDY = d[1];
+      this.patrolTimer = 60 + Math.random() * 120;
+    }
+    const nx = this.x + this.patrolDX * this.baseSpeed;
+    const ny = this.y + this.patrolDY * this.baseSpeed;
+    if (!mapCollide(nx, this.y, this.w, this.h)) this.x = nx; else { this.patrolDX *= -1; this.patrolTimer = 0; }
+    if (!mapCollide(this.x, ny, this.w, this.h)) this.y = ny; else { this.patrolDY *= -1; this.patrolTimer = 0; }
+  }
+
+  update(dt, isHiding, companionDistract, runningAlert) {
+    if (!this.alive) return;
+    if (this.stunTimer > 0) { this.stunTimer -= dt; return; }
+    if (this.attackCooldown > 0) this.attackCooldown -= dt;
+
+    // Determine target: if player hiding AND this assassin is near companion → target companion
+    this.distracted = false;
+    let targetX, targetY, targetIsPlayer = false;
+
+    if (isHiding && companionDistract && entityDist(this, companion) < 130) {
+      this.distracted = true;
+      targetX = companion.x + companion.w / 2;
+      targetY = companion.y + companion.h / 2;
+    } else if (!isHiding) {
+      targetX = player.x + player.w / 2;
+      targetY = player.y + player.h / 2;
+      targetIsPlayer = true;
+    } else {
+      // Hidden, not distracted → patrol
+      this.patrol(dt); return;
+    }
+
+    const dx   = targetX - (this.x + this.w / 2);
+    const dy   = targetY - (this.y + this.h / 2);
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const detectR = runningAlert ? 400 : 180;
+
+    if (dist < detectR || this.state === 'chase') {
+      this.state = 'chase';
+      const speed = this.baseSpeed * (runningAlert ? 1.6 : 1.2);
+
+      // Telegraph → attack when close to PLAYER only
+      if (targetIsPlayer && dist < 38 && this.attackCooldown <= 0) {
+        this.state = 'telegraph';
+        this.telegraphTimer += dt;
+        if (this.telegraphTimer >= 0.5) {
+          this.telegraphTimer = 0;
+          this.state = 'chase';
+          this.attackCooldown = 2.0;
+          // Deal damage if player didn't dodge (still in range)
+          const cx = player.x + player.w / 2 - (this.x + this.w / 2);
+          const cy = player.y + player.h / 2 - (this.y + this.h / 2);
+          if (Math.sqrt(cx*cx+cy*cy) < 42 && player.invincible <= 0) {
+            player.hp = Math.max(0, player.hp - 1);
+            player.invincible = 0.9;
+          }
+        }
+        return;
+      } else if (dist >= 38) {
+        this.telegraphTimer = 0;
+      }
+
+      if (dist > 4) this.moveToward(targetX, targetY, speed);
+    } else {
+      this.patrol(dt);
+    }
+  }
+
+  draw() {
+    if (!this.alive) return;
+
+    // Telegraph glow ring
+    if (this.state === 'telegraph') {
+      const a = (Math.sin(Date.now() * 0.025) * 0.5 + 0.5);
+      ctx.beginPath();
+      ctx.arc(this.x + this.w/2, this.y + this.h/2, 34, 0, Math.PI*2);
+      ctx.fillStyle   = `rgba(255,80,0,${a*0.25})`;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255,60,0,${a})`;
+      ctx.lineWidth = 3; ctx.stroke();
+    }
+
+    // Body
+    ctx.fillStyle = this.stunTimer > 0 ? '#884400' :
+                    (this.state === 'telegraph' ? '#ff3300' : '#cc0000');
+    ctx.fillRect(this.x, this.y, this.w, this.h);
+    ctx.strokeStyle = '#1a0000'; ctx.lineWidth = 2;
+    ctx.strokeRect(this.x, this.y, this.w, this.h);
+
+    // Red eye dot
+    ctx.fillStyle = '#ffaaaa';
+    ctx.fillRect(this.x + 4, this.y + 5, 4, 4);
+    ctx.fillRect(this.x + 12, this.y + 5, 4, 4);
+
+    // Chase indicator
+    if (this.state === 'chase') {
+      ctx.fillStyle = '#ff4444'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+      ctx.fillText('!', this.x + this.w/2, this.y - 9);
+    }
+
+    // HP bar (only when damaged)
+    if (this.hp < this.maxHp) {
+      ctx.fillStyle = '#550000'; ctx.fillRect(this.x, this.y - 7, this.w, 4);
+      ctx.fillStyle = '#ff2200'; ctx.fillRect(this.x, this.y - 7, this.w * (this.hp / this.maxHp), 4);
+    }
+
+    ctx.fillStyle = '#ff7777'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('ASN', this.x + this.w/2, this.y - 14);
+  }
+}
+
+const assassins = [];
+
+// ---------- GAME STATE ----------
+let gameState = 'title';  // title | playing | win | lose
+let phase     = 'day';    // day | night
+let phaseTime = DAY_DUR;
+let money       = 0;
+let hasSword    = false;
+let nightWarningTimer = 0;
+let runWarningTimer   = 0;
+let isHiding          = false;
+let hideTimeLeft      = 0;
+let companionDistract = false;
+let spawnSchedule     = [];  // [{at: secondsIntoNight, count: n}]
+let nightElapsed      = 0;
+let lastFrameTime     = 0;
+
+// ---------- HELPERS ----------
+function entityDist(a, b) {
+  const dx = (a.x + a.w/2) - (b.x + b.w/2);
+  const dy = (a.y + a.h/2) - (b.y + b.h/2);
+  return Math.sqrt(dx*dx + dy*dy);
+}
+function near(a, b, r) { return entityDist(a, b) < r; }
+function rectsOverlap(a, b) {
+  return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+}
+function moveEntity(ent, dx, dy) {
+  if (!mapCollide(ent.x + dx, ent.y, ent.w, ent.h)) ent.x += dx;
+  if (!mapCollide(ent.x, ent.y + dy, ent.w, ent.h)) ent.y += dy;
+}
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ---------- INIT / RESET ----------
+function initGame() {
+  phase     = 'day';
+  phaseTime = DAY_DUR;
+  money     = 0;
+  hasSword  = false;
+  nightWarningTimer = 0;
+  runWarningTimer   = 0;
+  isHiding          = false;
+  hideTimeLeft      = 0;
+  companionDistract = false;
+  nightElapsed      = 0;
+
+  player.x = 370; player.y = 448;
+  player.hp = 5;  player.invincible = 0;
+  player.attackTimer = 0; player.attackCooldown = 0;
+  player.isJumping = false; player.jumpTimer = 0;
+  player.facingX = 1; player.facingY = 0;
+  player.isRunning = false;
+
+  companion.x = 415; companion.y = 448; companion.state = 'follow';
+  doctor.visible = false; doctor.dialog = ''; doctor.dialogTimer = 0;
+  workers.forEach(w => { w.cooldown = 0; w.flash = 0; });
+
+  assassins.length = 0;
+
+  // Spawn wave schedule (seconds into night)
+  spawnSchedule = [
+    { at: 0,  count: 2 },
+    { at: 20, count: 1 },
+    { at: 40, count: 2 },
+    { at: 60, count: 1 },
+  ];
+
+  gameState = 'playing';
+}
+
+// ---------- SWORD ATTACK ----------
+function doSwordAttack() {
+  if (!hasSword) return;
+  player.attackTimer    = 0.25;
+  player.attackCooldown = 0.45;
+  const hitW = 34, hitH = 34;
+  const hx = player.x + player.w/2 - hitW/2 + player.facingX * 30;
+  const hy = player.y + player.h/2 - hitH/2 + player.facingY * 30;
+  assassins.forEach(a => {
+    if (!a.alive) return;
+    if (a.x < hx+hitW && a.x+a.w > hx && a.y < hy+hitH && a.y+a.h > hy) {
+      a.hp--;
+      a.stunTimer = 0.3;
+      if (a.hp <= 0) { a.alive = false; a.hp = 0; }
+    }
+  });
+}
+
+// ---------- JUMP ATTACK ----------
+function doJumpAttack() {
+  player.isJumping  = true;
+  player.jumpTimer  = 0.4;
+  // Whether or not player has sword, check for assassin overlap → jump land bonus
+  assassins.forEach(a => {
+    if (!a.alive) return;
+    if (entityDist(player, a) < 55) {
+      const dmg = hasSword ? 2 : 1;
+      a.hp -= dmg;
+      a.stunTimer = 1.0;
+      if (a.hp <= 0) { a.alive = false; a.hp = 0; }
+    }
+  });
+}
+
+// ---------- SPAWN ASSASSINS ----------
+function spawnAssassins(count) {
+  for (let i = 0; i < count; i++) {
+    // Spawn spread across lobby bottom
+    const sx = 120 + Math.random() * 560;
+    const sy = 500 + Math.random() * 40;
+    assassins.push(new Assassin(sx, sy));
+  }
+}
+
+// ---------- UPDATE PLAYER ----------
+function updatePlayer(dt) {
+  if (player.invincible > 0) player.invincible -= dt;
+  if (player.attackTimer    > 0) player.attackTimer    -= dt;
+  if (player.attackCooldown > 0) player.attackCooldown -= dt;
+  if (player.jumpTimer      > 0) { player.jumpTimer -= dt; if (player.jumpTimer <= 0) player.isJumping = false; }
+
+  if (isHiding) {
+    hideTimeLeft -= dt;
+    if (hideTimeLeft <= 0 || pressed('KeyH')) {
+      isHiding = false; companionDistract = false; companion.state = 'follow';
+    }
+    return;
+  }
+
+  // Movement input
+  let dx = 0, dy = 0;
+  if (held('ArrowLeft')  || held('KeyA')) dx -= 1;
+  if (held('ArrowRight') || held('KeyD')) dx += 1;
+  if (held('ArrowUp')    || held('KeyW')) dy -= 1;
+  if (held('ArrowDown')  || held('KeyS')) dy += 1;
+  if (dx && dy) { dx *= 0.707; dy *= 0.707; }
+
+  // Running
+  const running = (held('ShiftLeft') || held('ShiftRight')) && (dx !== 0 || dy !== 0);
+  player.isRunning = running;
+  if (running) {
+    runWarningTimer = 2.5;
+    // Alert all nearby assassins
+    assassins.forEach(a => { if (a.alive && entityDist(player, a) < 400) a.state = 'chase'; });
+  }
+
+  const speed = running ? player.speed * 1.85 : player.speed;
+
+  // Update facing direction
+  if (dx !== 0) { player.facingX = dx > 0 ? 1 : -1; player.facingY = 0; }
+  else if (dy !== 0) { player.facingY = dy > 0 ? 1 : -1; player.facingX = 0; }
+
+  moveEntity(player, dx * speed, dy * speed);
+  player.x = clamp(player.x, 1, COLS * TILE - player.w - 1);
+  player.y = clamp(player.y, 1, ROWS * TILE - player.h - 1);
+
+  // Attack (X or Z)
+  if (hasSword && player.attackCooldown <= 0 && (pressed('KeyX') || pressed('KeyZ'))) {
+    doSwordAttack();
+  }
+  // Jump attack (Space)
+  if (pressed('Space')) doJumpAttack();
+
+  // Interact with workers (E) – day only
+  if (pressed('KeyE') && phase === 'day') {
+    workers.forEach(w => {
+      if (near(player, w, 60) && w.cooldown <= 0) {
+        money += 10; w.cooldown = 20; w.flash = 2.5;
+      }
+    });
+  }
+  workers.forEach(w => { if (w.cooldown > 0) w.cooldown -= dt; if (w.flash > 0) w.flash -= dt; });
+
+  // Buy sword (C) near shop
+  if (pressed('KeyC') && near(player, swordShop, 70) && !hasSword) {
+    if (money >= 30) { hasSword = true; money -= 30; }
+  }
+
+  // Hide (H) near hiding spot – night only
+  if (pressed('KeyH') && phase === 'night') {
+    hidingSpots.forEach(spot => {
+      if (!isHiding && near(player, spot, 55)) {
+        isHiding = true;
+        hideTimeLeft = 12;
+        companion.state = 'distract';
+        companionDistract = true;
+      }
+    });
+  }
+
+  // Death
+  if (player.hp <= 0) { player.hp = 0; gameState = 'lose'; }
+}
+
+// ---------- UPDATE COMPANION ----------
+function updateCompanion(dt) {
+  if (companion.state === 'follow') {
+    if (entityDist(companion, player) > 55) {
+      const dx = (player.x + player.w/2) - (companion.x + companion.w/2);
+      const dy = (player.y + player.h/2) - (companion.y + companion.h/2);
+      const d  = Math.sqrt(dx*dx + dy*dy);
+      moveEntity(companion, (dx/d) * companion.speed, (dy/d) * companion.speed);
+    }
+  } else {
+    // Distract: move toward nearest living assassin
+    let nearest = null, bestDist = Infinity;
+    assassins.forEach(a => {
+      if (a.alive) { const d = entityDist(companion, a); if (d < bestDist) { bestDist = d; nearest = a; } }
+    });
+    if (nearest) {
+      const dx = (nearest.x + nearest.w/2) - (companion.x + companion.w/2);
+      const dy = (nearest.y + nearest.h/2) - (companion.y + companion.h/2);
+      const d  = Math.sqrt(dx*dx + dy*dy);
+      if (d > 28) moveEntity(companion, (dx/d) * companion.speed, (dy/d) * companion.speed);
+    } else if (!isHiding) {
+      companion.state = 'follow'; companionDistract = false;
+    }
+  }
+}
+
+// ---------- UPDATE DAY/NIGHT ----------
+function updatePhase(dt) {
+  if (doctor.dialogTimer > 0) doctor.dialogTimer -= dt;
+  if (doctor.dialogTimer <= 0 && doctor.dialog) doctor.dialog = '';
+  if (nightWarningTimer  > 0) nightWarningTimer  -= dt;
+  if (runWarningTimer    > 0) runWarningTimer    -= dt;
+
+  phaseTime -= dt;
+
+  if (phase === 'day' && phaseTime <= 0) {
+    // --- Transition to NIGHT ---
+    phase     = 'night';
+    phaseTime = NIGHT_DUR;
+    nightElapsed = 0;
+    nightWarningTimer = 5;
+    // Doctor appears with warning
+    doctor.visible = true;
+    doctor.x = 300; doctor.y = 445;
+    doctor.dialog = "They're coming! Doctors die first — we must survive the night!";
+    doctor.dialogTimer = 6;
+    // Remove workers as interactive targets
+  }
+
+  if (phase === 'night') {
+    nightElapsed += dt;
+
+    // Process spawn schedule
+    spawnSchedule = spawnSchedule.filter(entry => {
+      if (nightElapsed >= entry.at) {
+        spawnAssassins(entry.count);
+        return false; // remove processed entry
+      }
+      return true;
+    });
+
+    // Night win condition
+    if (phaseTime <= 0) gameState = 'win';
+  }
+}
+
+// ---------- MAIN UPDATE ----------
+function update(dt) {
+  if (gameState !== 'playing') return;
+  updatePhase(dt);
+  updatePlayer(dt);
+  updateCompanion(dt);
+  const runAlert = player.isRunning;
+  assassins.forEach(a => a.update(dt, isHiding, companionDistract, runAlert));
+}
+
+// =====================================================
+// RENDER
+// =====================================================
+
+// ---------- TEXT WRAP ----------
+function wrapText(text, maxW) {
+  const words = text.split(' ');
+  const lines = []; let cur = '';
+  ctx.font = '10px monospace';
+  words.forEach(w => {
+    const test = cur ? cur + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW) { if (cur) lines.push(cur); cur = w; }
+    else cur = test;
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+// ---------- DRAW MAP ----------
+function drawMap() {
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const ch = MAP[row][col];
+      const px = col * TILE, py = row * TILE;
+      if (ch === 'W') {
+        ctx.fillStyle = '#3d2b1f'; ctx.fillRect(px, py, TILE, TILE);
+        ctx.fillStyle = '#52382a'; ctx.fillRect(px+2, py+2, TILE-4, TILE-4);
+        ctx.fillStyle = '#2a1d14'; ctx.fillRect(px, py, TILE, 2); ctx.fillRect(px, py, 2, TILE);
+      } else {
+        // Floor shade: rooms lighter than hallway/lobby
+        const inTopRoom = row >= 1 && row <= 4;
+        const inBotRoom = row >= 9 && row <= 12;
+        ctx.fillStyle = (inTopRoom || inBotRoom) ? '#1e1a14' : '#17140f';
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.strokeStyle = '#211d17'; ctx.lineWidth = 0.5;
+        ctx.strokeRect(px, py, TILE, TILE);
+      }
+    }
+  }
+}
+
+// ---------- DRAW STATIC OBJECTS ----------
+function drawObjects() {
+  // Hiding spots
+  hidingSpots.forEach(s => {
+    ctx.fillStyle = '#090707'; ctx.fillRect(s.x, s.y, s.w, s.h);
+    ctx.strokeStyle = '#3a2a1e'; ctx.lineWidth = 1; ctx.strokeRect(s.x, s.y, s.w, s.h);
+    ctx.fillStyle = '#443322'; ctx.font = '7px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('HIDE', s.x + s.w/2, s.y + s.h/2 + 3);
+    if (phase === 'night') {
+      ctx.fillStyle = '#006633'; ctx.font = '7px monospace';
+      ctx.fillText('[H]', s.x + s.w/2, s.y - 3);
+    }
+  });
+
+  // Sword shop counter
+  ctx.fillStyle = '#7a5800'; ctx.fillRect(swordShop.x, swordShop.y, swordShop.w, swordShop.h);
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.strokeRect(swordShop.x, swordShop.y, swordShop.w, swordShop.h);
+  ctx.fillStyle = '#ffd700'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('⚔ SWORD', swordShop.x + swordShop.w/2, swordShop.y + 14);
+  ctx.fillText('SHOP $30', swordShop.x + swordShop.w/2, swordShop.y + 26);
+  ctx.fillStyle = hasSword ? '#666' : '#ffd700';
+  ctx.fillText(hasSword ? '[OWNED]' : '[C] BUY', swordShop.x + swordShop.w/2, swordShop.y + 38);
+}
+
+// ---------- DRAW WORKERS ----------
+function drawWorkers() {
+  workers.forEach(w => {
+    ctx.fillStyle = '#22aa22'; ctx.fillRect(w.x, w.y, w.w, w.h);
+    ctx.strokeStyle = '#115511'; ctx.lineWidth = 1; ctx.strokeRect(w.x, w.y, w.w, w.h);
+    // Hat-like top
+    ctx.fillStyle = '#33cc33'; ctx.fillRect(w.x+3, w.y-3, w.w-6, 5);
+    ctx.fillStyle = '#44ff44'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('NPC', w.x + w.w/2, w.y - 6);
+    if (phase === 'day') {
+      const label = w.cooldown > 0 ? `${Math.ceil(w.cooldown)}s` : '[E]$10';
+      ctx.fillStyle = w.cooldown > 0 ? '#888' : '#ffff44';
+      ctx.font = '8px monospace'; ctx.fillText(label, w.x + w.w/2, w.y + w.h + 11);
+    }
+    if (w.flash > 0) {
+      ctx.fillStyle = '#ffff00'; ctx.font = 'bold 13px monospace';
+      ctx.fillText('+$10', w.x + w.w/2, w.y - 18);
+    }
+  });
+}
+
+// ---------- DRAW COMPANION ----------
+function drawCompanion() {
+  ctx.fillStyle = '#0099bb'; ctx.fillRect(companion.x, companion.y, companion.w, companion.h);
+  ctx.strokeStyle = '#006688'; ctx.lineWidth = 1; ctx.strokeRect(companion.x, companion.y, companion.w, companion.h);
+  // Eyes
+  ctx.fillStyle = '#ccffff';
+  ctx.fillRect(companion.x+3, companion.y+4, 4, 4);
+  ctx.fillRect(companion.x+11, companion.y+4, 4, 4);
+  ctx.fillStyle = '#00ddff'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('CMP', companion.x + companion.w/2, companion.y - 5);
+  if (companion.state === 'distract') {
+    ctx.fillStyle = '#ff00ff'; ctx.font = 'bold 9px monospace';
+    ctx.fillText('DIST!', companion.x + companion.w/2, companion.y - 16);
+  }
+}
+
+// ---------- DRAW DOCTOR ----------
+function drawDoctor() {
+  if (!doctor.visible) return;
+  ctx.fillStyle = '#e8e8e8'; ctx.fillRect(doctor.x, doctor.y, doctor.w, doctor.h);
+  ctx.strokeStyle = '#999'; ctx.lineWidth = 1; ctx.strokeRect(doctor.x, doctor.y, doctor.w, doctor.h);
+  // Red cross on coat
+  ctx.fillStyle = '#cc0000';
+  ctx.fillRect(doctor.x + doctor.w/2 - 1, doctor.y + 4, 3, 9);
+  ctx.fillRect(doctor.x + doctor.w/2 - 4, doctor.y + 7, 9, 3);
+  ctx.fillStyle = '#ffffff'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('DOC', doctor.x + doctor.w/2, doctor.y - 5);
+
+  if (doctor.dialog) {
+    const lines = wrapText(doctor.dialog, 185);
+    const bW = 210, lH = 14, bH = lines.length * lH + 18;
+    let bx = clamp(doctor.x - 96, 6, W - bW - 6);
+    let by = doctor.y - bH - 8; if (by < 6) by = doctor.y + doctor.h + 8;
+    ctx.fillStyle = 'rgba(0,0,0,0.88)'; ctx.fillRect(bx, by, bW, bH);
+    ctx.strokeStyle = '#dddddd'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bW, bH);
+    ctx.fillStyle = '#ffffff'; ctx.font = '10px monospace'; ctx.textAlign = 'left';
+    lines.forEach((l, i) => ctx.fillText(l, bx + 8, by + 14 + i * lH));
+  }
+}
+
+// ---------- DRAW PLAYER ----------
+function drawPlayer() {
+  // Flash during invincibility
+  if (player.invincible > 0 && Math.floor(player.invincible * 12) % 2 === 0) return;
+
+  const px = player.x, py = player.y, pw = player.w, ph = player.h;
+  const drawPY = player.isJumping ? py - 9 : py;
+
+  if (player.isJumping) {
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(px + pw/2, py + ph + 2, pw/2 + 2, 5, 0, 0, Math.PI*2); ctx.fill();
+  }
+
+  ctx.fillStyle = player.isJumping ? '#5599ff' : '#2266dd';
+  ctx.fillRect(px, drawPY, pw + (player.isJumping ? 4 : 0), ph + (player.isJumping ? 4 : 0));
+  ctx.strokeStyle = '#aaccff'; ctx.lineWidth = 2;
+  ctx.strokeRect(px, drawPY, pw + (player.isJumping ? 4 : 0), ph + (player.isJumping ? 4 : 0));
+
+  // Eye (facing direction indicator)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(px + pw/2 + player.facingX * 5 - 3, drawPY + ph/2 + player.facingY * 5 - 3, 6, 6);
+
+  // Sword swing arc
+  if (player.attackTimer > 0 && hasSword) {
+    const hx = px + pw/2 + player.facingX * 32 - 12;
+    const hy = drawPY + ph/2 + player.facingY * 32 - 12;
+    ctx.fillStyle = 'rgba(220,220,60,0.75)'; ctx.fillRect(hx, hy, 24, 24);
+    ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 2; ctx.strokeRect(hx, hy, 24, 24);
+    ctx.beginPath();
+    ctx.moveTo(px + pw/2, drawPY + ph/2);
+    ctx.lineTo(px + pw/2 + player.facingX * 42, drawPY + ph/2 + player.facingY * 42);
+    ctx.strokeStyle = '#dddd44'; ctx.lineWidth = 3; ctx.stroke();
+  }
+
+  // Labels
+  ctx.fillStyle = '#aaccff'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('YOU', px + pw/2, drawPY - 4);
+
+  // Mini HP bar above
+  const bW = 36, bX = px + pw/2 - bW/2;
+  ctx.fillStyle = '#330000'; ctx.fillRect(bX, drawPY - 10, bW, 4);
+  ctx.fillStyle = '#cc0000'; ctx.fillRect(bX, drawPY - 10, bW * (player.hp / player.maxHp), 4);
+
+  if (player.isRunning) {
+    ctx.fillStyle = '#ff8800'; ctx.font = 'bold 10px monospace';
+    ctx.fillText('RUN!', px + pw/2, drawPY - 16);
+  }
+}
+
+// ---------- DRAW HUD ----------
+function drawHUD() {
+  // ── Health (top-left) ──
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(5, 5, 148, 30);
+  ctx.fillStyle = '#aaaaaa'; ctx.font = '13px monospace'; ctx.textAlign = 'left';
+  ctx.fillText('HP:', 12, 25);
+  for (let i = 0; i < player.maxHp; i++) {
+    ctx.fillStyle = i < player.hp ? '#ff2244' : '#331122';
+    ctx.fillText('♥', 48 + i * 19, 25);
+  }
+
+  // ── Money + sword (top-right) ──
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(W - 165, 5, 160, 50);
+  ctx.fillStyle = '#ffdd00'; ctx.font = '13px monospace'; ctx.textAlign = 'left';
+  ctx.fillText('$' + money, W - 155, 23);
+  ctx.fillStyle = hasSword ? '#66ff66' : '#ff5555';
+  ctx.fillText('SWORD: ' + (hasSword ? 'YES ⚔' : 'NO'), W - 155, 42);
+
+  // ── Phase timer (top-center) ──
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(W/2 - 105, 5, 210, 50);
+  ctx.fillStyle = phase === 'day' ? '#ffdd44' : '#bb44ff';
+  ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center';
+  ctx.fillText(phase === 'day' ? '☀ DAY' : '☾ NIGHT', W/2, 24);
+  const tl = Math.ceil(phaseTime);
+  ctx.fillStyle = tl < 15 ? '#ff4444' : '#ffffff';
+  ctx.font = '12px monospace';
+  ctx.fillText(phase === 'day' ? `Night in: ${tl}s` : `Dawn in: ${tl}s`, W/2, 43);
+
+  // ── Running warning ──
+  if (runWarningTimer > 0) {
+    const a = Math.min(1, runWarningTimer);
+    ctx.fillStyle = `rgba(160,0,0,${a*0.75})`; ctx.fillRect(W/2-235, 62, 470, 32);
+    ctx.fillStyle = `rgba(255,100,80,${a})`;
+    ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('⚠ RUNNING DETECTED — Assassins alerted!', W/2, 82);
+  }
+
+  // ── Hiding status ──
+  if (isHiding) {
+    ctx.fillStyle = 'rgba(0,40,0,0.82)'; ctx.fillRect(W/2-215, H/2-18, 430, 36);
+    ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 1; ctx.strokeRect(W/2-215, H/2-18, 430, 36);
+    ctx.fillStyle = '#00ff88'; ctx.font = '13px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(`HIDING… Companion distracting them! (${Math.ceil(hideTimeLeft)}s or [H])`, W/2, H/2+6);
+  }
+
+  // ── Night-start overlay ──
+  if (nightWarningTimer > 0) {
+    const a = Math.min(1, nightWarningTimer * 0.4);
+    ctx.fillStyle = `rgba(60,0,0,${a*0.55})`; ctx.fillRect(0, 0, W, GAME_H);
+    ctx.fillStyle = `rgba(255,50,50,${a})`;
+    ctx.font = 'bold 30px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('NIGHT HAS FALLEN', W/2, GAME_H/2 - 24);
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText('Assassins are here!', W/2, GAME_H/2 + 12);
+
+    // Survival options panel (first 4 seconds)
+    if (nightWarningTimer > 1) {
+      ctx.fillStyle = 'rgba(0,0,0,0.78)'; ctx.fillRect(W/2-215, GAME_H/2+40, 430, 95);
+      ctx.strokeStyle = '#aa4444'; ctx.lineWidth = 1; ctx.strokeRect(W/2-215, GAME_H/2+40, 430, 95);
+      ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#ffff44';
+      ctx.fillText('— SURVIVAL OPTIONS —', W/2, GAME_H/2+58);
+      ctx.fillStyle = '#88ff88'; ctx.font = '10px monospace';
+      ctx.fillText('✓ FIGHT  — Sword (X/Z) + Jump land (SPACE) = 2× damage', W/2, GAME_H/2+74);
+      ctx.fillStyle = '#aaaaff';
+      ctx.fillText('✓ HIDE   — Press H near closet; Companion distracts', W/2, GAME_H/2+89);
+      ctx.fillStyle = '#ff8888';
+      ctx.fillText('✗ RUN    — WORST: SHIFT attracts ALL nearby assassins', W/2, GAME_H/2+104);
+      ctx.fillStyle = '#666';
+      ctx.fillText('🔒 ESCAPE — Secret route UNAVAILABLE', W/2, GAME_H/2+119);
+    }
+  }
+
+  // ── Bottom control bar ──
+  ctx.fillStyle = '#0e0e0e'; ctx.fillRect(0, GAME_H, W, HUD_H);
+  ctx.fillStyle = '#444'; ctx.fillRect(0, GAME_H, W, 1);
+  ctx.fillStyle = '#888'; ctx.font = '9px monospace'; ctx.textAlign = 'left';
+  ctx.fillText(
+    'Move: WASD/Arrows  Jump: SPACE  Attack: X/Z  Interact: E  Buy: C near shop  Hide: H (night)  Sprint: SHIFT (worst!)',
+    8, GAME_H + 16
+  );
+}
+
+// ---------- DRAW SCREENS ----------
+function drawTitle() {
+  ctx.fillStyle = '#080808'; ctx.fillRect(0, 0, W, H);
+
+  // Dramatic title
+  ctx.shadowColor = '#cc0000'; ctx.shadowBlur = 30;
+  ctx.fillStyle = '#cc0000'; ctx.font = 'bold 78px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('ASSASSINS', W/2, 135);
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#666'; ctx.font = '15px monospace';
+  ctx.fillText('A Hotel Survival Game', W/2, 170);
+
+  ctx.fillStyle = '#440000'; ctx.fillRect(W/2-210, 185, 420, 2);
+
+  ctx.fillStyle = '#aaa'; ctx.font = '13px monospace';
+  ctx.fillText('You are trapped inside the hotel.', W/2, 218);
+  ctx.fillText('Survive from dusk until dawn.', W/2, 238);
+
+  ctx.font = '11px monospace';
+  ctx.fillStyle = '#ffdd44'; ctx.fillText('— SURVIVAL OPTIONS —', W/2, 270);
+  ctx.fillStyle = '#55cc55'; ctx.fillText('✓ FIGHT  — Buy a sword ($30). Swing: X/Z. Jump-land: SPACE (2× dmg, stun)', W/2, 290);
+  ctx.fillStyle = '#5577ff'; ctx.fillText('✓ HIDE   — Press H near closets. Companion lures assassins away.', W/2, 308);
+  ctx.fillStyle = '#ff5544'; ctx.fillText('✗ RUN    — WORST CHOICE. Sprint (SHIFT) alerts all nearby assassins.', W/2, 326);
+
+  ctx.fillStyle = '#aaa'; ctx.fillText('— DEFEAT OPTIONS —', W/2, 352);
+  ctx.fillStyle = '#55ff88';
+  ctx.fillText('Option 1 [AVAILABLE]  : Fight — earn $10 per job (E), buy sword (C)', W/2, 372);
+  ctx.fillStyle = '#554444';
+  // Intentionally unavailable per game design — listed to inform players this path is locked
+  ctx.fillText('Option 2 [UNAVAILABLE 🔒] : Secret escape route — LOCKED', W/2, 390);
+
+  ctx.fillStyle = '#444'; ctx.fillRect(W/2-210, 408, 420, 2);
+
+  // Start button
+  const bx = W/2-110, by = 420, bw = 220, bh = 50;
+  const mc = mouseClick;
+  const hover = mc && mc.x > bx && mc.x < bx+bw && mc.y > by && mc.y < by+bh;
+  ctx.fillStyle = '#aa0000'; ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('▶  START', W/2, by+33);
+
+  ctx.fillStyle = '#555'; ctx.font = '11px monospace';
+  ctx.fillText('Click START or press ENTER', W/2, 492);
+  ctx.fillText('Day: earn money & buy sword.  Night: survive 90 seconds.', W/2, 510);
+}
+
+function drawWin() {
+  ctx.fillStyle = 'rgba(0,0,20,0.96)'; ctx.fillRect(0, 0, W, H);
+  ctx.shadowColor = '#ffdd00'; ctx.shadowBlur = 25;
+  ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 52px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('DAWN BREAKS', W/2, 210);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#88ffaa'; ctx.font = '26px monospace';
+  ctx.fillText('You survived the night!', W/2, 270);
+  ctx.fillStyle = '#aaa'; ctx.font = '15px monospace';
+  ctx.fillText('The assassins have retreated into the shadows.', W/2, 320);
+  ctx.fillText('You live to see another day.', W/2, 345);
+  ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
+  ctx.fillText('Press ENTER to play again', W/2, 410);
+}
+
+function drawLose() {
+  ctx.fillStyle = 'rgba(16,0,0,0.96)'; ctx.fillRect(0, 0, W, H);
+  ctx.shadowColor = '#cc0000'; ctx.shadowBlur = 30;
+  ctx.fillStyle = '#cc0000'; ctx.font = 'bold 42px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('YOU HAVE BEEN', W/2, 210);
+  ctx.fillText('KILLED BY THE', W/2, 262);
+  ctx.fillText('ASSASSINS', W/2, 314);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#666'; ctx.font = '16px monospace';
+  ctx.fillText('The hotel falls silent…', W/2, 365);
+  ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
+  ctx.fillText('Press ENTER to try again', W/2, 420);
+}
+
+// ---------- MAIN LOOP ----------
+function render() {
+  ctx.clearRect(0, 0, W, H);
+
+  if (gameState === 'title') { drawTitle(); return; }
+  if (gameState === 'win')   { drawWin();   return; }
+  if (gameState === 'lose')  { drawLose();  return; }
+
+  // Playing
+  drawMap();
+  drawObjects();
+  drawWorkers();
+  drawDoctor();
+  drawCompanion();
+  // Draw assassins below player
+  assassins.forEach(a => a.draw());
+  drawPlayer();
+  drawHUD();
+}
+
+function gameLoop(ts) {
+  const dt = Math.min((ts - lastFrameTime) / 1000, 0.05); // cap delta at 50ms
+  lastFrameTime = ts;
+
+  // Title / end-screen input
+  if (gameState === 'title') {
+    if (pressed('Enter') || (mouseClick && (() => {
+        const bx=W/2-110, by=420, bw=220, bh=50;
+        return mouseClick.x>bx && mouseClick.x<bx+bw && mouseClick.y>by && mouseClick.y<by+bh;
+      })())) {
+      mouseClick = null; initGame();
+    }
+    mouseClick = null;
+  }
+  if ((gameState === 'win' || gameState === 'lose') && pressed('Enter')) initGame();
+
+  update(dt);
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+// ---------- BOOT ----------
+requestAnimationFrame(ts => { lastFrameTime = ts; requestAnimationFrame(gameLoop); });
+</script>
+</body>
+</html>
