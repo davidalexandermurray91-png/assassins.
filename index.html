@@ -36,6 +36,7 @@ const NIGHT_DUR = 90;          // seconds
 const DAWN_DUR  = 3;           // seconds of dawn transition
 const GUN_COST  = 50;          // cost to buy gun
 const VIS_RADIUS = 170;        // fog-of-war visibility radius
+const LOGIN_MSG_DUR = 1.4;     // seconds to show login success message before returning to title
 
 // ---------- FOG CANVAS ----------
 const fogCanvas = document.createElement('canvas');
@@ -347,12 +348,20 @@ let bullets           = [];
 const savedAccounts = JSON.parse(localStorage.getItem('asnAccounts') || '{}');
 let currentUser = null;
 const loginState = {
-  phase: 'username',  // 'username' | 'password'
+  phase: 'username',  // 'username' | 'password' | 'pending'
   inputBuffer: '',
   username: '',
   message: '',
   messageTimer: 0,
 };
+
+// Hash a password using SHA-256 (async, returns a hex string promise)
+function hashPassword(pw) {
+  const data = new TextEncoder().encode(pw);
+  return crypto.subtle.digest('SHA-256', data).then(buf =>
+    Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+  );
+}
 
 function showLogin() {
   gameState = 'login';
@@ -360,6 +369,7 @@ function showLogin() {
   loginState.inputBuffer = '';
   loginState.username = '';
   loginState.message = '';
+  loginState.messageTimer = 0;
 }
 
 function saveProgress() {
@@ -394,6 +404,16 @@ function moveEntity(ent, dx, dy) {
 }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
+// Build spawn schedule scaled to current night count
+function generateSpawnSchedule(n) {
+  return [
+    { at: 0,  count: 2 + Math.floor(n / 2) },
+    { at: 20, count: 1 + Math.floor(n / 3) },
+    { at: 40, count: 2 },
+    { at: 60, count: 1 + Math.floor(n / 2) },
+  ];
+}
+
 // ---------- INIT / RESET ----------
 function initGame(keepProgress) {
   phase     = 'day';
@@ -426,14 +446,7 @@ function initGame(keepProgress) {
   assassins.length = 0;
   bullets.length   = 0;
 
-  // Spawn wave schedule (seconds into night) – scales with nightsSurvived
-  const n = nightsSurvived;
-  spawnSchedule = [
-    { at: 0,  count: 2 + Math.floor(n / 2) },
-    { at: 20, count: 1 + Math.floor(n / 3) },
-    { at: 40, count: 2 },
-    { at: 60, count: 1 + Math.floor(n / 2) },
-  ];
+  spawnSchedule = generateSpawnSchedule(nightsSurvived);
 
   gameState = 'playing';
 }
@@ -674,14 +687,7 @@ function updatePhase(dt) {
       if (currentUser) saveProgress();
       phase = 'dawn';
       dawnTimer = DAWN_DUR;
-      // Scale next night's spawn schedule
-      const n = nightsSurvived;
-      spawnSchedule = [
-        { at: 0,  count: 2 + Math.floor(n / 2) },
-        { at: 20, count: 1 + Math.floor(n / 3) },
-        { at: 40, count: 2 },
-        { at: 60, count: 1 + Math.floor(n / 2) },
-      ];
+      spawnSchedule = generateSpawnSchedule(nightsSurvived);
     }
   }
 }
@@ -936,13 +942,13 @@ function drawFogOfWar() {
 
   fogCtx.globalCompositeOperation = 'destination-out';
 
-  const numRays = 300;
+  const numRays = 200;
   fogCtx.beginPath();
   fogCtx.moveTo(cx, cy);
   for (let i = 0; i <= numRays; i++) {
     const angle = (i / numRays) * Math.PI * 2;
     let endX = cx, endY = cy;
-    for (let r = 0; r <= VIS_RADIUS; r += 3) {
+    for (let r = 0; r <= VIS_RADIUS; r += 5) {
       const rx = cx + Math.cos(angle) * r;
       const ry = cy + Math.sin(angle) * r;
       if (tileWall(Math.floor(rx / TILE), Math.floor(ry / TILE))) {
@@ -1119,8 +1125,9 @@ function drawLogin() {
 
   ctx.fillStyle = '#440000'; ctx.fillRect(W/2-220, 130, 440, 1);
 
+  const isPending = loginState.phase === 'pending';
   const isUser = loginState.phase === 'username';
-  const cursor = Math.floor(Date.now() / 500) % 2 === 0 ? '|' : ' ';
+  const cursor = !isPending && Math.floor(Date.now() / 500) % 2 === 0 ? '|' : ' ';
 
   // Username field
   ctx.fillStyle = '#888'; ctx.font = '12px monospace'; ctx.textAlign = 'left';
@@ -1138,15 +1145,23 @@ function drawLogin() {
   ctx.fillStyle = '#888'; ctx.font = '12px monospace'; ctx.textAlign = 'left';
   ctx.fillText('PASSWORD:', W/2 - 210, 228);
   ctx.fillStyle = '#111'; ctx.fillRect(W/2 - 210, 235, 420, 34);
-  ctx.strokeStyle = !isUser ? '#cc0000' : '#444'; ctx.lineWidth = 2;
+  ctx.strokeStyle = !isUser && !isPending ? '#cc0000' : '#444'; ctx.lineWidth = 2;
   ctx.strokeRect(W/2 - 210, 235, 420, 34);
   ctx.fillStyle = '#fff'; ctx.font = '15px monospace'; ctx.textAlign = 'left';
   if (!isUser) {
-    ctx.fillText('•'.repeat(loginState.inputBuffer.length) + cursor, W/2 - 200, 258);
+    const display = isPending ? '•••' : '•'.repeat(loginState.inputBuffer.length) + cursor;
+    ctx.fillText(display, W/2 - 200, 258);
   }
 
-  // Message
-  if (loginState.message) {
+  // Pending spinner
+  if (isPending) {
+    const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4));
+    ctx.fillStyle = '#aaa'; ctx.font = '13px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('Verifying' + dots, W/2, 295);
+  }
+
+  // Message (success / error feedback)
+  if (loginState.message && !isPending) {
     ctx.fillStyle = loginState.message.startsWith('✓') ? '#44ff88' : '#ff4444';
     ctx.font = '13px monospace'; ctx.textAlign = 'center';
     ctx.fillText(loginState.message, W/2, 295);
@@ -1216,9 +1231,23 @@ function gameLoop(ts) {
     mouseClick = null;
   }
 
+  // ----- Login message timer (frame-based, replaces setTimeout) -----
+  if (gameState === 'login' && loginState.messageTimer > 0) {
+    loginState.messageTimer -= dt;
+    if (loginState.messageTimer <= 0 && currentUser) {
+      gameState = 'title';
+      loginState.message = '';
+    }
+  }
+
   // ----- Login screen input -----
-  if (gameState === 'login') {
-    if (pressed('Escape')) { gameState = 'title'; loginState.inputBuffer = ''; loginState.phase = 'username'; }
+  if (gameState === 'login' && loginState.phase !== 'pending') {
+    if (pressed('Escape')) {
+      gameState = 'title';
+      loginState.inputBuffer = '';
+      loginState.phase = 'username';
+      loginState.messageTimer = 0;
+    }
     if (pressed('Enter')) {
       if (loginState.phase === 'username') {
         const name = loginState.inputBuffer.trim();
@@ -1234,28 +1263,32 @@ function gameLoop(ts) {
         const pw = loginState.inputBuffer;
         if (pw.length === 0) {
           loginState.message = '✗ Please enter a password!';
-        } else if (savedAccounts[loginState.username]) {
-          // Existing account
-          if (savedAccounts[loginState.username].password === pw) {
-            currentUser = loginState.username;
-            loadProgress();
-            loginState.message = '✓ Welcome back, ' + currentUser + '!';
-            loginState.inputBuffer = '';
-            loginState.phase = 'username';
-            setTimeout(() => { gameState = 'title'; loginState.message = ''; }, 1400);
-          } else {
-            loginState.message = '✗ Wrong password. Try again.';
-            loginState.inputBuffer = '';
-          }
         } else {
-          // New account
-          savedAccounts[loginState.username] = { password: pw, save: null };
-          localStorage.setItem('asnAccounts', JSON.stringify(savedAccounts));
-          currentUser = loginState.username;
-          loginState.message = '✓ Account created! Welcome, ' + currentUser + '!';
+          loginState.phase = 'pending'; // disable input while hashing
           loginState.inputBuffer = '';
-          loginState.phase = 'username';
-          setTimeout(() => { gameState = 'title'; loginState.message = ''; }, 1400);
+          hashPassword(pw).then(hash => {
+            if (savedAccounts[loginState.username]) {
+              // Existing account – compare stored hash
+              if (savedAccounts[loginState.username].pwHash === hash) {
+                currentUser = loginState.username;
+                loadProgress();
+                loginState.message = '✓ Welcome back, ' + currentUser + '!';
+                loginState.phase = 'username';
+                loginState.messageTimer = LOGIN_MSG_DUR;
+              } else {
+                loginState.message = '✗ Wrong password. Try again.';
+                loginState.phase = 'password';
+              }
+            } else {
+              // New account – store hash (never the raw password)
+              savedAccounts[loginState.username] = { pwHash: hash, save: null };
+              localStorage.setItem('asnAccounts', JSON.stringify(savedAccounts));
+              currentUser = loginState.username;
+              loginState.message = '✓ Account created! Welcome, ' + currentUser + '!';
+              loginState.phase = 'username';
+              loginState.messageTimer = LOGIN_MSG_DUR;
+            }
+          });
         }
       }
     }
