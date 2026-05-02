@@ -172,11 +172,12 @@ class Assassin {
     if (d < 1) return;
     const nx = dx / d, ny = dy / d;
     const mx = nx * speed, my = ny * speed;
-    // Try full move, then axis-aligned fallbacks
-    if (!mapCollide(this.x + mx, this.y, this.w, this.h))       this.x += mx;
-    else if (!mapCollide(this.x + (mx > 0 ? speed : -speed), this.y, this.w, this.h)) this.x += (mx > 0 ? speed * 0.5 : -speed * 0.5);
-    if (!mapCollide(this.x, this.y + my, this.w, this.h))       this.y += my;
-    else if (!mapCollide(this.x, this.y + (my > 0 ? speed : -speed), this.w, this.h)) this.y += (my > 0 ? speed * 0.5 : -speed * 0.5);
+    // Try full move, then axis-aligned wall-slide fallbacks using the same step size
+    const slideStep = speed * 0.5;
+    if (!mapCollide(this.x + mx, this.y, this.w, this.h))                this.x += mx;
+    else if (!mapCollide(this.x + (mx > 0 ? slideStep : -slideStep), this.y, this.w, this.h)) this.x += (mx > 0 ? slideStep : -slideStep);
+    if (!mapCollide(this.x, this.y + my, this.w, this.h))                this.y += my;
+    else if (!mapCollide(this.x, this.y + (my > 0 ? slideStep : -slideStep), this.w, this.h)) this.y += (my > 0 ? slideStep : -slideStep);
     // Perpendicular nudge if fully stuck
     if (mapCollide(this.x + mx, this.y, this.w, this.h) && mapCollide(this.x, this.y + my, this.w, this.h)) {
       const px1 = -ny * speed, py1 = nx * speed;
@@ -859,6 +860,7 @@ function drawTitle() {
   ctx.fillStyle = '#55ff88';
   ctx.fillText('Option 1 [AVAILABLE]  : Fight — earn $10 per job (E), buy sword (C)', W/2, 372);
   ctx.fillStyle = '#554444';
+  // Intentionally unavailable per game design — listed to inform players this path is locked
   ctx.fillText('Option 2 [UNAVAILABLE 🔒] : Secret escape route — LOCKED', W/2, 390);
 
   ctx.fillStyle = '#444'; ctx.fillRect(W/2-210, 408, 420, 2);
