@@ -33,6 +33,15 @@ const GAME_H = ROWS * TILE;   // 576 – game area height
 const HUD_H  = H - GAME_H;    // 24 – bottom bar height
 const DAY_DUR   = 60;          // seconds
 const NIGHT_DUR = 90;          // seconds
+const DAWN_DUR  = 3;           // seconds of dawn transition
+const GUN_COST  = 50;          // cost to buy gun
+const VIS_RADIUS = 170;        // fog-of-war visibility radius
+const LOGIN_MSG_DUR = 1.4;     // seconds to show login success message before returning to title
+
+// ---------- FOG CANVAS ----------
+const fogCanvas = document.createElement('canvas');
+fogCanvas.width = W; fogCanvas.height = GAME_H;
+const fogCtx = fogCanvas.getContext('2d');
 
 // ---------- TILE MAP ----------
 // W = solid wall   . = walkable floor   D = doorway (floor tile)
@@ -85,6 +94,16 @@ document.addEventListener('keydown', e => {
   // prevent scroll on game keys
   if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))
     e.preventDefault();
+  // Capture printable characters for login screen text input
+  if (gameState === 'login') {
+    if (e.key === 'Backspace') {
+      loginState.inputBuffer = loginState.inputBuffer.slice(0, -1);
+      e.preventDefault();
+    } else if (e.key.length === 1 && loginState.inputBuffer.length < 24) {
+      loginState.inputBuffer += e.key;
+      e.preventDefault();
+    }
+  }
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; kUp[e.code] = true; });
 function pressed(c)  { const v = kDown[c]; delete kDown[c]; return !!v; }
@@ -98,7 +117,8 @@ canvas.addEventListener('click', e => {
 });
 
 // ---------- STATIC OBJECTS ----------
-const swordShop = { x: 80, y: 430, w: 70, h: 44 };
+const swordShop = { x: 80,  y: 430, w: 70, h: 44 };
+const gunShop   = { x: 170, y: 430, w: 70, h: 44 };
 
 // Hiding spots (dark closets, 1 per room, top & bottom)
 const hidingSpots = [
@@ -152,7 +172,7 @@ class Assassin {
   constructor(x, y) {
     this.x = x; this.y = y;
     this.w = 20; this.h = 20;
-    this.hp = 3; this.maxHp = 3;
+    this.hp = 5; this.maxHp = 5;
     this.baseSpeed = 1.4;
     this.state = 'patrol'; // patrol | chase | telegraph | stunned
     this.stunTimer = 0;
@@ -306,19 +326,67 @@ class Assassin {
 const assassins = [];
 
 // ---------- GAME STATE ----------
-let gameState = 'title';  // title | playing | win | lose
-let phase     = 'day';    // day | night
+let gameState = 'title';  // title | login | playing | win | lose
+let phase     = 'day';    // day | night | dawn
 let phaseTime = DAY_DUR;
-let money       = 0;
-let hasSword    = false;
+let money          = 0;
+let hasSword       = false;
+let hasGun         = false;
+let nightsSurvived = 0;
+let dawnTimer      = 0;
 let nightWarningTimer = 0;
 let runWarningTimer   = 0;
 let isHiding          = false;
 let hideTimeLeft      = 0;
 let companionDistract = false;
-let spawnSchedule     = [];  // [{at: secondsIntoNight, count: n}]
+let spawnSchedule     = [];
 let nightElapsed      = 0;
 let lastFrameTime     = 0;
+let bullets           = [];
+
+// ---------- ACCOUNT SYSTEM ----------
+const savedAccounts = JSON.parse(localStorage.getItem('asnAccounts') || '{}');
+let currentUser = null;
+const loginState = {
+  phase: 'username',  // 'username' | 'password' | 'pending'
+  inputBuffer: '',
+  username: '',
+  message: '',
+  messageTimer: 0,
+};
+
+// Hash a password using SHA-256 (async, returns a hex string promise)
+function hashPassword(pw) {
+  const data = new TextEncoder().encode(pw);
+  return crypto.subtle.digest('SHA-256', data).then(buf =>
+    Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+  );
+}
+
+function showLogin() {
+  gameState = 'login';
+  loginState.phase = 'username';
+  loginState.inputBuffer = '';
+  loginState.username = '';
+  loginState.message = '';
+  loginState.messageTimer = 0;
+}
+
+function saveProgress() {
+  if (!currentUser) return;
+  if (!savedAccounts[currentUser]) return;
+  savedAccounts[currentUser].save = { money, hasSword, hasGun, nightsSurvived };
+  localStorage.setItem('asnAccounts', JSON.stringify(savedAccounts));
+}
+
+function loadProgress() {
+  if (!currentUser || !savedAccounts[currentUser] || !savedAccounts[currentUser].save) return;
+  const s = savedAccounts[currentUser].save;
+  money          = s.money          || 0;
+  hasSword       = !!s.hasSword;
+  hasGun         = !!s.hasGun;
+  nightsSurvived = s.nightsSurvived || 0;
+}
 
 // ---------- HELPERS ----------
 function entityDist(a, b) {
@@ -336,18 +404,33 @@ function moveEntity(ent, dx, dy) {
 }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
+// Build spawn schedule scaled to current night count
+function generateSpawnSchedule(n) {
+  return [
+    { at: 0,  count: 2 + Math.floor(n / 2) },
+    { at: 20, count: 1 + Math.floor(n / 3) },
+    { at: 40, count: 2 },
+    { at: 60, count: 1 + Math.floor(n / 2) },
+  ];
+}
+
 // ---------- INIT / RESET ----------
-function initGame() {
+function initGame(keepProgress) {
   phase     = 'day';
   phaseTime = DAY_DUR;
-  money     = 0;
-  hasSword  = false;
+  if (!keepProgress) {
+    money          = 0;
+    hasSword       = false;
+    hasGun         = false;
+    nightsSurvived = 0;
+  }
   nightWarningTimer = 0;
   runWarningTimer   = 0;
   isHiding          = false;
   hideTimeLeft      = 0;
   companionDistract = false;
   nightElapsed      = 0;
+  dawnTimer         = 0;
 
   player.x = 370; player.y = 448;
   player.hp = 5;  player.invincible = 0;
@@ -361,14 +444,9 @@ function initGame() {
   workers.forEach(w => { w.cooldown = 0; w.flash = 0; });
 
   assassins.length = 0;
+  bullets.length   = 0;
 
-  // Spawn wave schedule (seconds into night)
-  spawnSchedule = [
-    { at: 0,  count: 2 },
-    { at: 20, count: 1 },
-    { at: 40, count: 2 },
-    { at: 60, count: 1 },
-  ];
+  spawnSchedule = generateSpawnSchedule(nightsSurvived);
 
   gameState = 'playing';
 }
@@ -404,6 +482,36 @@ function doJumpAttack() {
       a.stunTimer = 1.0;
       if (a.hp <= 0) { a.alive = false; a.hp = 0; }
     }
+  });
+}
+
+// ---------- GUN SHOOT ----------
+function doGunShoot() {
+  if (!hasGun || player.attackCooldown > 0) return;
+  player.attackCooldown = 0.5;
+  let bx = player.facingX, by = player.facingY;
+  if (bx === 0 && by === 0) bx = 1;
+  const speed = 14;
+  bullets.push({ x: player.x + player.w/2, y: player.y + player.h/2,
+                 dx: bx * speed, dy: by * speed, alive: true });
+}
+
+// ---------- UPDATE BULLETS ----------
+function updateBullets() {
+  bullets = bullets.filter(b => {
+    if (!b.alive) return false;
+    b.x += b.dx; b.y += b.dy;
+    if (mapCollide(b.x - 3, b.y - 3, 6, 6)) return false;
+    if (b.x < 0 || b.x > W || b.y < 0 || b.y > GAME_H) return false;
+    for (const a of assassins) {
+      if (!a.alive) continue;
+      if (b.x > a.x && b.x < a.x + a.w && b.y > a.y && b.y < a.y + a.h) {
+        a.hp--; a.stunTimer = 0.1;
+        if (a.hp <= 0) { a.alive = false; a.hp = 0; }
+        return false;
+      }
+    }
+    return true;
   });
 }
 
@@ -459,9 +567,10 @@ function updatePlayer(dt) {
   player.x = clamp(player.x, 1, COLS * TILE - player.w - 1);
   player.y = clamp(player.y, 1, ROWS * TILE - player.h - 1);
 
-  // Attack (X or Z)
-  if (hasSword && player.attackCooldown <= 0 && (pressed('KeyX') || pressed('KeyZ'))) {
-    doSwordAttack();
+  // Attack (X or Z) – gun takes priority over sword
+  if (player.attackCooldown <= 0 && (pressed('KeyX') || pressed('KeyZ'))) {
+    if (hasGun) doGunShoot();
+    else if (hasSword) doSwordAttack();
   }
   // Jump attack (Space)
   if (pressed('Space')) doJumpAttack();
@@ -476,9 +585,10 @@ function updatePlayer(dt) {
   }
   workers.forEach(w => { if (w.cooldown > 0) w.cooldown -= dt; if (w.flash > 0) w.flash -= dt; });
 
-  // Buy sword (C) near shop
-  if (pressed('KeyC') && near(player, swordShop, 70) && !hasSword) {
-    if (money >= 30) { hasSword = true; money -= 30; }
+  // Buy sword (C) near sword shop, or buy gun near gun shop
+  if (pressed('KeyC') && phase === 'day') {
+    if (near(player, swordShop, 70) && !hasSword && money >= 30) { hasSword = true; money -= 30; }
+    if (near(player, gunShop,   70) && !hasGun   && money >= GUN_COST) { hasGun = true; money -= GUN_COST; }
   }
 
   // Hide (H) near hiding spot – night only
@@ -530,36 +640,55 @@ function updatePhase(dt) {
   if (nightWarningTimer  > 0) nightWarningTimer  -= dt;
   if (runWarningTimer    > 0) runWarningTimer    -= dt;
 
+  if (phase === 'dawn') {
+    dawnTimer -= dt;
+    if (dawnTimer <= 0) {
+      phase = 'day';
+      phaseTime = DAY_DUR;
+      assassins.length = 0;
+      bullets.length   = 0;
+      nightElapsed     = 0;
+      isHiding = false; companionDistract = false;
+      companion.state = 'follow';
+      player.x = 370; player.y = 448;
+      player.hp = player.maxHp; player.invincible = 0;
+      companion.x = 415; companion.y = 448;
+    }
+    return;
+  }
+
   phaseTime -= dt;
 
   if (phase === 'day' && phaseTime <= 0) {
-    // --- Transition to NIGHT ---
     phase     = 'night';
     phaseTime = NIGHT_DUR;
     nightElapsed = 0;
     nightWarningTimer = 5;
-    // Doctor appears with warning
     doctor.visible = true;
     doctor.x = 300; doctor.y = 445;
     doctor.dialog = "They're coming! Doctors die first — we must survive the night!";
     doctor.dialogTimer = 6;
-    // Remove workers as interactive targets
   }
 
   if (phase === 'night') {
     nightElapsed += dt;
 
-    // Process spawn schedule
     spawnSchedule = spawnSchedule.filter(entry => {
       if (nightElapsed >= entry.at) {
         spawnAssassins(entry.count);
-        return false; // remove processed entry
+        return false;
       }
       return true;
     });
 
-    // Night win condition
-    if (phaseTime <= 0) gameState = 'win';
+    // Night survived → dawn transition
+    if (phaseTime <= 0) {
+      nightsSurvived++;
+      if (currentUser) saveProgress();
+      phase = 'dawn';
+      dawnTimer = DAWN_DUR;
+      spawnSchedule = generateSpawnSchedule(nightsSurvived);
+    }
   }
 }
 
@@ -567,8 +696,10 @@ function updatePhase(dt) {
 function update(dt) {
   if (gameState !== 'playing') return;
   updatePhase(dt);
+  if (phase === 'dawn') return; // pause gameplay during dawn
   updatePlayer(dt);
   updateCompanion(dt);
+  updateBullets();
   const runAlert = player.isRunning;
   assassins.forEach(a => a.update(dt, isHiding, companionDistract, runAlert));
 }
@@ -593,16 +724,33 @@ function wrapText(text, maxW) {
 
 // ---------- DRAW MAP ----------
 function drawMap() {
+  const depth = 5;
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
       const ch = MAP[row][col];
       const px = col * TILE, py = row * TILE;
       if (ch === 'W') {
+        // Front face
         ctx.fillStyle = '#3d2b1f'; ctx.fillRect(px, py, TILE, TILE);
         ctx.fillStyle = '#52382a'; ctx.fillRect(px+2, py+2, TILE-4, TILE-4);
         ctx.fillStyle = '#2a1d14'; ctx.fillRect(px, py, TILE, 2); ctx.fillRect(px, py, 2, TILE);
+        // Pseudo-3D top face
+        ctx.fillStyle = '#6b4c38';
+        ctx.beginPath();
+        ctx.moveTo(px,           py);
+        ctx.lineTo(px + depth,   py - depth);
+        ctx.lineTo(px + TILE + depth, py - depth);
+        ctx.lineTo(px + TILE,    py);
+        ctx.closePath(); ctx.fill();
+        // Pseudo-3D right face
+        ctx.fillStyle = '#241a10';
+        ctx.beginPath();
+        ctx.moveTo(px + TILE,         py);
+        ctx.lineTo(px + TILE + depth, py - depth);
+        ctx.lineTo(px + TILE + depth, py + TILE - depth);
+        ctx.lineTo(px + TILE,         py + TILE);
+        ctx.closePath(); ctx.fill();
       } else {
-        // Floor shade: rooms lighter than hallway/lobby
         const inTopRoom = row >= 1 && row <= 4;
         const inBotRoom = row >= 9 && row <= 12;
         ctx.fillStyle = (inTopRoom || inBotRoom) ? '#1e1a14' : '#17140f';
@@ -636,6 +784,15 @@ function drawObjects() {
   ctx.fillText('SHOP $30', swordShop.x + swordShop.w/2, swordShop.y + 26);
   ctx.fillStyle = hasSword ? '#666' : '#ffd700';
   ctx.fillText(hasSword ? '[OWNED]' : '[C] BUY', swordShop.x + swordShop.w/2, swordShop.y + 38);
+
+  // Gun shop counter
+  ctx.fillStyle = '#1a3a1a'; ctx.fillRect(gunShop.x, gunShop.y, gunShop.w, gunShop.h);
+  ctx.strokeStyle = '#44ff44'; ctx.lineWidth = 2; ctx.strokeRect(gunShop.x, gunShop.y, gunShop.w, gunShop.h);
+  ctx.fillStyle = '#44ff44'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('🔫 GUN', gunShop.x + gunShop.w/2, gunShop.y + 14);
+  ctx.fillText(`SHOP $${GUN_COST}`, gunShop.x + gunShop.w/2, gunShop.y + 26);
+  ctx.fillStyle = hasGun ? '#666' : '#44ff44';
+  ctx.fillText(hasGun ? '[OWNED]' : '[C] BUY', gunShop.x + gunShop.w/2, gunShop.y + 38);
 }
 
 // ---------- DRAW WORKERS ----------
@@ -749,6 +906,67 @@ function drawPlayer() {
   }
 }
 
+// ---------- DRAW BULLETS ----------
+function drawBullets() {
+  bullets.forEach(b => {
+    ctx.fillStyle = '#ffdd00';
+    ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,200,0,0.4)';
+    ctx.beginPath(); ctx.arc(b.x - b.dx*0.3, b.y - b.dy*0.3, 2, 0, Math.PI*2); ctx.fill();
+  });
+}
+
+// ---------- DRAW DAWN OVERLAY ----------
+function drawDawnOverlay() {
+  const t = 1 - dawnTimer / DAWN_DUR;
+  ctx.fillStyle = `rgba(255,200,50,${0.3 + t * 0.35})`;
+  ctx.fillRect(0, 0, W, GAME_H);
+  ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 20;
+  ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 36px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('DAWN BREAKS!', W/2, GAME_H/2 - 30);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffffff'; ctx.font = '20px monospace';
+  ctx.fillText(`Night ${nightsSurvived} survived!`, W/2, GAME_H/2 + 15);
+  ctx.fillStyle = '#ddaa44'; ctx.font = '13px monospace';
+  ctx.fillText('A new day begins...', W/2, GAME_H/2 + 48);
+}
+
+// ---------- DRAW FOG OF WAR ----------
+function drawFogOfWar() {
+  const cx = player.x + player.w / 2;
+  const cy = player.y + player.h / 2;
+
+  fogCtx.globalCompositeOperation = 'source-over';
+  fogCtx.fillStyle = 'rgba(0,0,0,0.93)';
+  fogCtx.fillRect(0, 0, W, GAME_H);
+
+  fogCtx.globalCompositeOperation = 'destination-out';
+
+  const numRays = 200;
+  fogCtx.beginPath();
+  fogCtx.moveTo(cx, cy);
+  for (let i = 0; i <= numRays; i++) {
+    const angle = (i / numRays) * Math.PI * 2;
+    let endX = cx, endY = cy;
+    for (let r = 0; r <= VIS_RADIUS; r += 5) {
+      const rx = cx + Math.cos(angle) * r;
+      const ry = cy + Math.sin(angle) * r;
+      if (tileWall(Math.floor(rx / TILE), Math.floor(ry / TILE))) {
+        endX = rx; endY = ry;
+        break;
+      }
+      endX = rx; endY = ry;
+    }
+    fogCtx.lineTo(endX, endY);
+  }
+  fogCtx.closePath();
+  fogCtx.fillStyle = 'rgba(0,0,0,1)';
+  fogCtx.fill();
+
+  fogCtx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(fogCanvas, 0, 0);
+}
+
 // ---------- DRAW HUD ----------
 function drawHUD() {
   // ── Health (top-left) ──
@@ -760,22 +978,27 @@ function drawHUD() {
     ctx.fillText('♥', 48 + i * 19, 25);
   }
 
-  // ── Money + sword (top-right) ──
-  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(W - 165, 5, 160, 50);
+  // ── Money + weapons (top-right) ──
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(W - 165, 5, 160, 72);
   ctx.fillStyle = '#ffdd00'; ctx.font = '13px monospace'; ctx.textAlign = 'left';
   ctx.fillText('$' + money, W - 155, 23);
   ctx.fillStyle = hasSword ? '#66ff66' : '#ff5555';
   ctx.fillText('SWORD: ' + (hasSword ? 'YES ⚔' : 'NO'), W - 155, 42);
+  ctx.fillStyle = hasGun ? '#66ff66' : '#ff5555';
+  ctx.fillText('GUN: '   + (hasGun   ? 'YES 🔫' : 'NO'), W - 155, 58);
+  ctx.fillStyle = '#888'; ctx.font = '10px monospace';
+  ctx.fillText(`Nights: ${nightsSurvived}`, W - 155, 72);
 
   // ── Phase timer (top-center) ──
   ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(W/2 - 105, 5, 210, 50);
-  ctx.fillStyle = phase === 'day' ? '#ffdd44' : '#bb44ff';
+  const phaseLabel = phase === 'day' ? '☀ DAY' : (phase === 'dawn' ? '🌅 DAWN' : '☾ NIGHT');
+  ctx.fillStyle = phase === 'day' ? '#ffdd44' : (phase === 'dawn' ? '#ffaa44' : '#bb44ff');
   ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center';
-  ctx.fillText(phase === 'day' ? '☀ DAY' : '☾ NIGHT', W/2, 24);
+  ctx.fillText(phaseLabel, W/2, 24);
   const tl = Math.ceil(phaseTime);
   ctx.fillStyle = tl < 15 ? '#ff4444' : '#ffffff';
   ctx.font = '12px monospace';
-  ctx.fillText(phase === 'day' ? `Night in: ${tl}s` : `Dawn in: ${tl}s`, W/2, 43);
+  ctx.fillText(phase === 'day' ? `Night in: ${tl}s` : (phase === 'dawn' ? 'New day...' : `Dawn in: ${tl}s`), W/2, 43);
 
   // ── Running warning ──
   if (runWarningTimer > 0) {
@@ -826,9 +1049,13 @@ function drawHUD() {
   ctx.fillStyle = '#444'; ctx.fillRect(0, GAME_H, W, 1);
   ctx.fillStyle = '#888'; ctx.font = '9px monospace'; ctx.textAlign = 'left';
   ctx.fillText(
-    'Move: WASD/Arrows  Jump: SPACE  Attack: X/Z  Interact: E  Buy: C near shop  Hide: H (night)  Sprint: SHIFT (worst!)',
+    'Move: WASD/Arrows  Jump: SPACE  Attack: X/Z (sword/gun)  Interact: E  Buy: C near shop  Hide: H (night)  Sprint: SHIFT (worst!)',
     8, GAME_H + 16
   );
+  if (currentUser) {
+    ctx.fillStyle = '#44cc88'; ctx.textAlign = 'right';
+    ctx.fillText('👤 ' + currentUser, W - 8, GAME_H + 16);
+  }
 }
 
 // ---------- DRAW SCREENS ----------
@@ -838,60 +1065,118 @@ function drawTitle() {
   // Dramatic title
   ctx.shadowColor = '#cc0000'; ctx.shadowBlur = 30;
   ctx.fillStyle = '#cc0000'; ctx.font = 'bold 78px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('ASSASSINS', W/2, 135);
+  ctx.fillText('ASSASSINS', W/2, 120);
   ctx.shadowBlur = 0;
 
-  ctx.fillStyle = '#666'; ctx.font = '15px monospace';
-  ctx.fillText('A Hotel Survival Game', W/2, 170);
+  ctx.fillStyle = '#666'; ctx.font = '14px monospace';
+  ctx.fillText('A Hotel Survival Game', W/2, 152);
 
-  ctx.fillStyle = '#440000'; ctx.fillRect(W/2-210, 185, 420, 2);
+  ctx.fillStyle = '#440000'; ctx.fillRect(W/2-210, 165, 420, 2);
 
-  ctx.fillStyle = '#aaa'; ctx.font = '13px monospace';
-  ctx.fillText('You are trapped inside the hotel.', W/2, 218);
-  ctx.fillText('Survive from dusk until dawn.', W/2, 238);
+  ctx.fillStyle = '#aaa'; ctx.font = '12px monospace';
+  ctx.fillText('Trapped in a hotel. Survive every night. Watch the shadows.', W/2, 188);
 
-  ctx.font = '11px monospace';
-  ctx.fillStyle = '#ffdd44'; ctx.fillText('— SURVIVAL OPTIONS —', W/2, 270);
-  ctx.fillStyle = '#55cc55'; ctx.fillText('✓ FIGHT  — Buy a sword ($30). Swing: X/Z. Jump-land: SPACE (2× dmg, stun)', W/2, 290);
-  ctx.fillStyle = '#5577ff'; ctx.fillText('✓ HIDE   — Press H near closets. Companion lures assassins away.', W/2, 308);
-  ctx.fillStyle = '#ff5544'; ctx.fillText('✗ RUN    — WORST CHOICE. Sprint (SHIFT) alerts all nearby assassins.', W/2, 326);
+  ctx.font = '10px monospace';
+  ctx.fillStyle = '#ffdd44'; ctx.fillText('— SURVIVAL OPTIONS —', W/2, 212);
+  ctx.fillStyle = '#55cc55'; ctx.fillText('✓ FIGHT  — Sword ($30, X/Z swing, SPACE jump). Gun ($50, X/Z shoots any range).', W/2, 228);
+  ctx.fillStyle = '#5577ff'; ctx.fillText('✓ HIDE   — Press H near closets. Companion lures assassins.', W/2, 244);
+  ctx.fillStyle = '#ff5544'; ctx.fillText('✗ RUN    — WORST: Sprint (SHIFT) alerts all nearby assassins.', W/2, 260);
+  ctx.fillStyle = '#ffaa44'; ctx.fillText('⚠ FOG    — Limited vision. Assassins may lurk just around the corner!', W/2, 276);
 
-  ctx.fillStyle = '#aaa'; ctx.fillText('— DEFEAT OPTIONS —', W/2, 352);
-  ctx.fillStyle = '#55ff88';
-  ctx.fillText('Option 1 [AVAILABLE]  : Fight — earn $10 per job (E), buy sword (C)', W/2, 372);
-  ctx.fillStyle = '#554444';
-  // Intentionally unavailable per game design — listed to inform players this path is locked
-  ctx.fillText('Option 2 [UNAVAILABLE 🔒] : Secret escape route — LOCKED', W/2, 390);
+  ctx.fillStyle = '#aaa'; ctx.fillText('— DAYTIME SHOPS (C to buy) —', W/2, 298);
+  ctx.fillStyle = '#ffd700'; ctx.fillText('⚔ Sword Shop   $30   (melee range)', W/2, 314);
+  ctx.fillStyle = '#44ff44'; ctx.fillText('🔫 Gun Shop    $50   (shoots across any distance)', W/2, 330);
 
-  ctx.fillStyle = '#444'; ctx.fillRect(W/2-210, 408, 420, 2);
+  ctx.fillStyle = '#444'; ctx.fillRect(W/2-210, 346, 420, 2);
+
+  // Account info
+  if (currentUser) {
+    ctx.fillStyle = '#44cc88'; ctx.font = 'bold 12px monospace';
+    ctx.fillText(`👤 Logged in: ${currentUser}   Nights survived: ${nightsSurvived}`, W/2, 364);
+  } else {
+    ctx.fillStyle = '#888'; ctx.font = '11px monospace';
+    ctx.fillText('Press ESC to log in / create an account and save your progress', W/2, 364);
+  }
 
   // Start button
-  const bx = W/2-110, by = 420, bw = 220, bh = 50;
+  const bx = W/2-110, by = 382, bw = 220, bh = 46;
   const mc = mouseClick;
-  const hover = mc && mc.x > bx && mc.x < bx+bw && mc.y > by && mc.y < by+bh;
   ctx.fillStyle = '#aa0000'; ctx.fillRect(bx, by, bw, bh);
   ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
   ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('▶  START', W/2, by+33);
+  ctx.fillText('▶  START', W/2, by + 31);
 
   ctx.fillStyle = '#555'; ctx.font = '11px monospace';
-  ctx.fillText('Click START or press ENTER', W/2, 492);
-  ctx.fillText('Day: earn money & buy sword.  Night: survive 90 seconds.', W/2, 510);
+  ctx.fillText('Click START or press ENTER   |   ESC = Account', W/2, 446);
+  ctx.fillText('Day: earn $10/job (E), buy weapons.  Night: survive 90s.', W/2, 462);
 }
 
-function drawWin() {
-  ctx.fillStyle = 'rgba(0,0,20,0.96)'; ctx.fillRect(0, 0, W, H);
-  ctx.shadowColor = '#ffdd00'; ctx.shadowBlur = 25;
-  ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 52px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('DAWN BREAKS', W/2, 210);
+// ---------- DRAW LOGIN ----------
+function drawLogin() {
+  ctx.fillStyle = '#080808'; ctx.fillRect(0, 0, W, H);
+
+  ctx.shadowColor = '#cc0000'; ctx.shadowBlur = 20;
+  ctx.fillStyle = '#cc0000'; ctx.font = 'bold 42px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('ASSASSINS', W/2, 80);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#88ffaa'; ctx.font = '26px monospace';
-  ctx.fillText('You survived the night!', W/2, 270);
-  ctx.fillStyle = '#aaa'; ctx.font = '15px monospace';
-  ctx.fillText('The assassins have retreated into the shadows.', W/2, 320);
-  ctx.fillText('You live to see another day.', W/2, 345);
-  ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
-  ctx.fillText('Press ENTER to play again', W/2, 410);
+
+  ctx.fillStyle = '#aaa'; ctx.font = '16px monospace';
+  ctx.fillText('Account Login / Register', W/2, 115);
+
+  ctx.fillStyle = '#440000'; ctx.fillRect(W/2-220, 130, 440, 1);
+
+  const isPending = loginState.phase === 'pending';
+  const isUser = loginState.phase === 'username';
+  const cursor = !isPending && Math.floor(Date.now() / 500) % 2 === 0 ? '|' : ' ';
+
+  // Username field
+  ctx.fillStyle = '#888'; ctx.font = '12px monospace'; ctx.textAlign = 'left';
+  ctx.fillText('USERNAME:', W/2 - 210, 165);
+  ctx.fillStyle = '#111'; ctx.fillRect(W/2 - 210, 172, 420, 34);
+  ctx.strokeStyle = isUser ? '#cc0000' : '#444'; ctx.lineWidth = 2;
+  ctx.strokeRect(W/2 - 210, 172, 420, 34);
+  ctx.fillStyle = '#fff'; ctx.font = '15px monospace'; ctx.textAlign = 'left';
+  ctx.fillText(
+    isUser ? loginState.inputBuffer + cursor : loginState.username,
+    W/2 - 200, 195
+  );
+
+  // Password field
+  ctx.fillStyle = '#888'; ctx.font = '12px monospace'; ctx.textAlign = 'left';
+  ctx.fillText('PASSWORD:', W/2 - 210, 228);
+  ctx.fillStyle = '#111'; ctx.fillRect(W/2 - 210, 235, 420, 34);
+  ctx.strokeStyle = !isUser && !isPending ? '#cc0000' : '#444'; ctx.lineWidth = 2;
+  ctx.strokeRect(W/2 - 210, 235, 420, 34);
+  ctx.fillStyle = '#fff'; ctx.font = '15px monospace'; ctx.textAlign = 'left';
+  if (!isUser) {
+    const display = isPending ? '•••' : '•'.repeat(loginState.inputBuffer.length) + cursor;
+    ctx.fillText(display, W/2 - 200, 258);
+  }
+
+  // Pending spinner
+  if (isPending) {
+    const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4));
+    ctx.fillStyle = '#aaa'; ctx.font = '13px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('Verifying' + dots, W/2, 295);
+  }
+
+  // Message (success / error feedback)
+  if (loginState.message && !isPending) {
+    ctx.fillStyle = loginState.message.startsWith('✓') ? '#44ff88' : '#ff4444';
+    ctx.font = '13px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(loginState.message, W/2, 295);
+  }
+
+  ctx.fillStyle = '#666'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('ENTER confirms each field.  New username = create account.', W/2, 322);
+  ctx.fillText('Existing username + correct password = log in.', W/2, 338);
+  ctx.fillStyle = '#444';
+  ctx.fillText('Press ESC to go back', W/2, 365);
+
+  if (currentUser) {
+    ctx.fillStyle = '#44cc88'; ctx.font = 'bold 12px monospace';
+    ctx.fillText('Currently logged in as: ' + currentUser, W/2, 392);
+  }
 }
 
 function drawLose() {
@@ -913,18 +1198,20 @@ function render() {
   ctx.clearRect(0, 0, W, H);
 
   if (gameState === 'title') { drawTitle(); return; }
-  if (gameState === 'win')   { drawWin();   return; }
+  if (gameState === 'login') { drawLogin(); return; }
   if (gameState === 'lose')  { drawLose();  return; }
 
-  // Playing
+  // Playing (includes dawn phase)
   drawMap();
   drawObjects();
   drawWorkers();
   drawDoctor();
   drawCompanion();
-  // Draw assassins below player
   assassins.forEach(a => a.draw());
+  drawBullets();
   drawPlayer();
+  drawFogOfWar();
+  if (phase === 'dawn') drawDawnOverlay();
   drawHUD();
 }
 
@@ -932,17 +1219,85 @@ function gameLoop(ts) {
   const dt = Math.min((ts - lastFrameTime) / 1000, 0.05); // cap delta at 50ms
   lastFrameTime = ts;
 
-  // Title / end-screen input
+  // ----- Title screen input -----
   if (gameState === 'title') {
-    if (pressed('Enter') || (mouseClick && (() => {
-        const bx=W/2-110, by=420, bw=220, bh=50;
+    if (pressed('Escape')) { showLogin(); }
+    else if (pressed('Enter') || (mouseClick && (() => {
+        const bx=W/2-110, by=382, bw=220, bh=46;
         return mouseClick.x>bx && mouseClick.x<bx+bw && mouseClick.y>by && mouseClick.y<by+bh;
       })())) {
-      mouseClick = null; initGame();
+      mouseClick = null; initGame(!!currentUser);
     }
     mouseClick = null;
   }
-  if ((gameState === 'win' || gameState === 'lose') && pressed('Enter')) initGame();
+
+  // ----- Login message timer (frame-based, replaces setTimeout) -----
+  if (gameState === 'login' && loginState.messageTimer > 0) {
+    loginState.messageTimer -= dt;
+    if (loginState.messageTimer <= 0 && currentUser) {
+      gameState = 'title';
+      loginState.message = '';
+    }
+  }
+
+  // ----- Login screen input -----
+  if (gameState === 'login' && loginState.phase !== 'pending') {
+    if (pressed('Escape')) {
+      gameState = 'title';
+      loginState.inputBuffer = '';
+      loginState.phase = 'username';
+      loginState.messageTimer = 0;
+    }
+    if (pressed('Enter')) {
+      if (loginState.phase === 'username') {
+        const name = loginState.inputBuffer.trim();
+        if (name.length === 0) {
+          loginState.message = '✗ Please enter a username!';
+        } else {
+          loginState.username = name;
+          loginState.inputBuffer = '';
+          loginState.phase = 'password';
+          loginState.message = '';
+        }
+      } else {
+        const pw = loginState.inputBuffer;
+        if (pw.length === 0) {
+          loginState.message = '✗ Please enter a password!';
+        } else {
+          loginState.phase = 'pending'; // disable input while hashing
+          loginState.inputBuffer = '';
+          hashPassword(pw).then(hash => {
+            if (savedAccounts[loginState.username]) {
+              // Existing account – compare stored hash
+              if (savedAccounts[loginState.username].pwHash === hash) {
+                currentUser = loginState.username;
+                loadProgress();
+                loginState.message = '✓ Welcome back, ' + currentUser + '!';
+                loginState.phase = 'username';
+                loginState.messageTimer = LOGIN_MSG_DUR;
+              } else {
+                loginState.message = '✗ Wrong password. Try again.';
+                loginState.phase = 'password';
+              }
+            } else {
+              // New account – store hash (never the raw password)
+              savedAccounts[loginState.username] = { pwHash: hash, save: null };
+              localStorage.setItem('asnAccounts', JSON.stringify(savedAccounts));
+              currentUser = loginState.username;
+              loginState.message = '✓ Account created! Welcome, ' + currentUser + '!';
+              loginState.phase = 'username';
+              loginState.messageTimer = LOGIN_MSG_DUR;
+            }
+          });
+        }
+      }
+    }
+  }
+
+  // ----- Lose screen input -----
+  if (gameState === 'lose' && pressed('Enter')) {
+    initGame(false); // full reset on death
+  }
 
   update(dt);
   render();
