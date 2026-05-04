@@ -2,22 +2,111 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>ASSASSINS</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       background: #000;
       display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
+      flex-direction: column;
+      height: 100vh; /* fallback */
+      height: 100svh;
       font-family: 'Courier New', monospace;
+      overflow: hidden;
+    }
+    #game-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      background: #000;
     }
     canvas { display: block; border: 2px solid #333; }
+
+    /* ── Mobile controls bar ── */
+    #mobile-controls {
+      background: #080808;
+      border-top: 2px solid #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    #dpad {
+      display: grid;
+      grid-template-areas:
+        ".    up   ."
+        "left gap  right"
+        ".    down .";
+      grid-template-columns: repeat(3, 46px);
+      grid-template-rows: repeat(3, 46px);
+      gap: 4px;
+    }
+    #actions {
+      display: grid;
+      grid-template-columns: repeat(2, 56px);
+      grid-template-rows: repeat(3, 46px);
+      gap: 4px;
+    }
+    .ctrl-btn {
+      background: #1a1a1a;
+      border: 2px solid #444;
+      border-radius: 8px;
+      color: #ccc;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      font-weight: bold;
+      line-height: 1.2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .ctrl-btn:active { background: #2a2a2a; border-color: #888; }
+    .btn-up    { grid-area: up; }
+    .btn-left  { grid-area: left; }
+    .btn-gap   { grid-area: gap; background: transparent; border-color: transparent; pointer-events: none; }
+    .btn-right { grid-area: right; }
+    .btn-down  { grid-area: down; }
+    .act-jump   { color: #88aaff; border-color: #335588; }
+    .act-atk    { color: #ffaa44; border-color: #885522; }
+    .act-hide   { color: #44ff88; border-color: #226644; }
+    .act-use    { color: #ffff44; border-color: #666622; }
+    .act-buy    { color: #ffd700; border-color: #664400; }
+    .ctrl-sub { font-size: 9px; display: block; }
   </style>
 </head>
 <body>
-<canvas id="c" width="800" height="600"></canvas>
+<div id="game-container">
+  <canvas id="c" width="800" height="600"></canvas>
+</div>
+<div id="mobile-controls">
+  <!-- D-pad -->
+  <div id="dpad">
+    <button class="ctrl-btn btn-up"    data-key="ArrowUp">▲</button>
+    <button class="ctrl-btn btn-left"  data-key="ArrowLeft">◀</button>
+    <div class="ctrl-btn btn-gap"></div>
+    <button class="ctrl-btn btn-right" data-key="ArrowRight">▶</button>
+    <button class="ctrl-btn btn-down"  data-key="ArrowDown">▼</button>
+  </div>
+  <!-- Action buttons -->
+  <div id="actions">
+    <button class="ctrl-btn act-jump"   data-key="Space">JUMP</button>
+    <button class="ctrl-btn act-atk"    data-key="KeyX">ATK</button>
+    <button class="ctrl-btn act-hide"   data-key="KeyH">HIDE<br><span class="ctrl-sub">[H]</span></button>
+    <button class="ctrl-btn act-use"    data-key="KeyE">USE<br><span class="ctrl-sub">[E]</span></button>
+    <button class="ctrl-btn act-buy"    data-key="KeyC">BUY<br><span class="ctrl-sub">[C]</span></button>
+    <button class="ctrl-btn act-sprint" data-key="ShiftLeft">⚠ RUN<br><span class="ctrl-sub">(worst!)</span></button>
+  </div>
+</div>
 <script>
 // =====================================================
 // ASSASSINS - A Hotel Survival Game
@@ -109,12 +198,22 @@ document.addEventListener('keyup', e => { keys[e.code] = false; kUp[e.code] = tr
 function pressed(c)  { const v = kDown[c]; delete kDown[c]; return !!v; }
 function held(c)     { return !!keys[c]; }
 
-// Mouse click for title start button
+// Mouse / touch for title start button
 let mouseClick = null;
 canvas.addEventListener('click', e => {
   const r = canvas.getBoundingClientRect();
-  mouseClick = { x: e.clientX - r.left, y: e.clientY - r.top };
+  const scaleX = canvas.width / r.width;
+  const scaleY = canvas.height / r.height;
+  mouseClick = { x: (e.clientX - r.left) * scaleX, y: (e.clientY - r.top) * scaleY };
 });
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const r = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / r.width;
+  const scaleY = canvas.height / r.height;
+  mouseClick = { x: (touch.clientX - r.left) * scaleX, y: (touch.clientY - r.top) * scaleY };
+}, { passive: false });
 
 // ---------- STATIC OBJECTS ----------
 const swordShop = { x: 80,  y: 430, w: 70, h: 44 };
@@ -1306,6 +1405,31 @@ function gameLoop(ts) {
 
 // ---------- BOOT ----------
 requestAnimationFrame(ts => { lastFrameTime = ts; requestAnimationFrame(gameLoop); });
+
+// ---------- CANVAS RESIZE ----------
+function resizeCanvas() {
+  const ctrlH = document.getElementById('mobile-controls').offsetHeight;
+  const availW = window.innerWidth;
+  const availH = window.innerHeight - ctrlH;
+  const scale  = Math.min(availW / W, availH / H);
+  canvas.style.width  = Math.floor(W * scale) + 'px';
+  canvas.style.height = Math.floor(H * scale) + 'px';
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ---------- MOBILE BUTTON CONTROLS ----------
+document.querySelectorAll('.ctrl-btn[data-key]').forEach(btn => {
+  const key = btn.dataset.key;
+  function press()   { if (!keys[key]) { keys[key] = true;  kDown[key] = true; } }
+  function release() { keys[key] = false; kUp[key] = true; }
+  btn.addEventListener('touchstart',  e => { e.preventDefault(); press();   }, { passive: false });
+  btn.addEventListener('touchend',    e => { e.preventDefault(); release(); }, { passive: false });
+  btn.addEventListener('touchcancel', e => { e.preventDefault(); release(); }, { passive: false });
+  btn.addEventListener('mousedown',   e => { e.preventDefault(); press();   });
+  btn.addEventListener('mouseup',     () => release());
+  btn.addEventListener('mouseleave',  () => release());
+});
 </script>
 </body>
 </html>
