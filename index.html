@@ -24,7 +24,7 @@
       min-height: 0;
       background: #000;
     }
-    canvas { display: block; border: 2px solid #333; }
+    canvas { display: block; }
 
     /* ── Mobile controls bar ── */
     #mobile-controls {
@@ -33,9 +33,9 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 14px;
-      padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
-      gap: 8px;
+      padding: 5px 10px;
+      padding-bottom: max(5px, env(safe-area-inset-bottom, 5px));
+      gap: 6px;
       flex-shrink: 0;
     }
     #dpad {
@@ -44,15 +44,15 @@
         ".    up   ."
         "left gap  right"
         ".    down .";
-      grid-template-columns: repeat(3, clamp(48px, 14vw, 68px));
-      grid-template-rows:    repeat(3, clamp(48px, 14vw, 68px));
-      gap: 4px;
+      grid-template-columns: repeat(3, clamp(42px, 12vw, 60px));
+      grid-template-rows:    repeat(3, clamp(42px, 12vw, 60px));
+      gap: 3px;
     }
     #actions {
       display: grid;
-      grid-template-columns: repeat(2, clamp(60px, 18vw, 84px));
-      grid-template-rows:    repeat(3, clamp(48px, 14vw, 68px));
-      gap: 4px;
+      grid-template-columns: repeat(2, clamp(52px, 15vw, 72px));
+      grid-template-rows:    repeat(3, clamp(42px, 12vw, 60px));
+      gap: 3px;
     }
     .ctrl-btn {
       background: #1c1c1c;
@@ -60,7 +60,7 @@
       border-radius: 10px;
       color: #d0d0d0;
       font-family: 'Courier New', monospace;
-      font-size: clamp(12px, 3.8vw, 16px);
+      font-size: clamp(11px, 3.4vw, 15px);
       font-weight: bold;
       line-height: 1.2;
       display: flex;
@@ -85,12 +85,90 @@
     .act-use    { color: #ffff44; border-color: #666622; }
     .act-buy    { color: #ffd700; border-color: #664400; }
     .act-sprint { color: #ff7755; border-color: #662211; }
-    .ctrl-sub { font-size: clamp(9px, 2.8vw, 12px); display: block; opacity: 0.8; }
+    /* ── Info button ── */
+    #info-btn {
+      font-size: clamp(18px, 5vw, 24px);
+      align-self: center;
+      background: #1a1a1a;
+      border: 2px solid #555;
+      border-radius: 50%;
+      width: clamp(38px, 10vw, 52px);
+      height: clamp(38px, 10vw, 52px);
+      color: #aaa;
+      cursor: pointer;
+      touch-action: manipulation;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #info-btn:active { background: #333; border-color: #aaa; }
+    /* ── Help overlay ── */
+    #help-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(0,0,0,0.96);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      flex-direction: column;
+    }
+    #help-content {
+      padding: 18px 16px 32px;
+      color: #ccc;
+      font-family: 'Courier New', monospace;
+      max-width: 560px;
+      margin: 0 auto;
+      line-height: 1.55;
+    }
+    #help-content h2 { color: #cc0000; font-size: clamp(18px,5vw,24px); margin-bottom: 12px; text-align: center; text-shadow: 0 0 20px #cc0000; }
+    #help-content h3 { color: #ffdd44; font-size: clamp(13px,3.8vw,16px); margin: 14px 0 5px; }
+    #help-content p  { font-size: clamp(12px,3.2vw,14px); margin-bottom: 5px; }
+    #help-close {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: #aa0000;
+      border: 2px solid #ff4444;
+      border-radius: 8px;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      font-size: clamp(14px,4vw,17px);
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 18px;
+      touch-action: manipulation;
+    }
   </style>
 </head>
 <body>
 <div id="game-container">
   <canvas id="c" width="800" height="600"></canvas>
+</div>
+<!-- Help overlay -->
+<div id="help-overlay">
+  <div id="help-content">
+    <button id="help-close">✕ CLOSE</button>
+    <h2>ASSASSINS</h2>
+    <h3>🎯 Goal</h3>
+    <p>Survive the night in the hotel. Earn money during the day, buy weapons, then survive 90 seconds of assassins each night.</p>
+    <h3>⚔ Combat</h3>
+    <p><b>ATK</b> – Attack with sword (melee) or gun (ranged, any direction).</p>
+    <p><b>JUMP</b> – Jump attack. Landing near assassins = 2× damage with sword.</p>
+    <h3>🌙 Night Survival</h3>
+    <p><b>HIDE</b> – Near a dark closet: hide for 12 s. Companion distracts assassins.</p>
+    <p><b>SPRINT ⚠</b> – Alerts ALL nearby assassins! Avoid unless desperate.</p>
+    <h3>☀ Day Activities</h3>
+    <p><b>USE</b> – Near a green worker (NPC): earn $10.</p>
+    <p><b>BUY</b> – Near a shop counter: ⚔ Sword $30 (melee) · 🔫 Gun $50 (ranged).</p>
+    <h3>👁 Fog of War</h3>
+    <p>Limited vision at night — assassins may lurk just around the corner!</p>
+    <h3>💾 Account</h3>
+    <p>Press ESC on title to log in / create an account and save progress.</p>
+  </div>
 </div>
 <div id="mobile-controls">
   <!-- D-pad -->
@@ -101,14 +179,16 @@
     <button class="ctrl-btn btn-right" data-key="ArrowRight">▶</button>
     <button class="ctrl-btn btn-down"  data-key="ArrowDown">▼</button>
   </div>
+  <!-- Info button -->
+  <button id="info-btn" aria-label="Help / Info">ⓘ</button>
   <!-- Action buttons -->
   <div id="actions">
     <button class="ctrl-btn act-jump"   data-key="Space">JUMP</button>
     <button class="ctrl-btn act-atk"    data-key="KeyX">ATK</button>
-    <button class="ctrl-btn act-hide"   data-key="KeyH">HIDE<br><span class="ctrl-sub">[H]</span></button>
-    <button class="ctrl-btn act-use"    data-key="KeyE">USE<br><span class="ctrl-sub">[E]</span></button>
-    <button class="ctrl-btn act-buy"    data-key="KeyC">BUY<br><span class="ctrl-sub">[C]</span></button>
-    <button class="ctrl-btn act-sprint" data-key="ShiftLeft" aria-label="Sprint – risky, alerts assassins">SPRINT<br><span class="ctrl-sub">⚠ risky</span></button>
+    <button class="ctrl-btn act-hide"   data-key="KeyH">HIDE</button>
+    <button class="ctrl-btn act-use"    data-key="KeyE">USE</button>
+    <button class="ctrl-btn act-buy"    data-key="KeyC">BUY</button>
+    <button class="ctrl-btn act-sprint" data-key="ShiftLeft" aria-label="Sprint – risky, alerts assassins">SPRINT<br><small style="font-size:0.7em;opacity:0.8">⚠</small></button>
   </div>
 </div>
 <script>
@@ -247,17 +327,13 @@ function held(c)     { return !!keys[c]; }
 let mouseClick = null;
 canvas.addEventListener('click', e => {
   const r = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / r.width;
-  const scaleY = canvas.height / r.height;
-  mouseClick = { x: (e.clientX - r.left) * scaleX, y: (e.clientY - r.top) * scaleY };
+  mouseClick = { x: (e.clientX - r.left) / gameScaleX, y: (e.clientY - r.top) / gameScaleY };
 });
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   const touch = e.touches[0];
   const r = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / r.width;
-  const scaleY = canvas.height / r.height;
-  mouseClick = { x: (touch.clientX - r.left) * scaleX, y: (touch.clientY - r.top) * scaleY };
+  mouseClick = { x: (touch.clientX - r.left) / gameScaleX, y: (touch.clientY - r.top) / gameScaleY };
 }, { passive: false });
 
 // ---------- STATIC OBJECTS ----------
@@ -489,6 +565,7 @@ let lastCountdownSec  = -1;
 let nightElapsed      = 0;
 let lastFrameTime     = 0;
 let bullets           = [];
+let gameScaleX = 1, gameScaleY = 1;
 
 // ---------- ACCOUNT SYSTEM ----------
 const savedAccounts = JSON.parse(localStorage.getItem('asnAccounts') || '{}');
@@ -1358,11 +1435,13 @@ function drawLose() {
 
 // ---------- MAIN LOOP ----------
 function render() {
+  ctx.save();
+  ctx.scale(gameScaleX, gameScaleY);
   ctx.clearRect(0, 0, W, H);
 
-  if (gameState === 'title') { drawTitle(); return; }
-  if (gameState === 'login') { drawLogin(); return; }
-  if (gameState === 'lose')  { drawLose();  return; }
+  if (gameState === 'title') { drawTitle(); ctx.restore(); return; }
+  if (gameState === 'login') { drawLogin(); ctx.restore(); return; }
+  if (gameState === 'lose')  { drawLose();  ctx.restore(); return; }
 
   // Playing (includes dawn phase)
   drawMap();
@@ -1376,6 +1455,7 @@ function render() {
   drawFogOfWar();
   if (phase === 'dawn') drawDawnOverlay();
   drawHUD();
+  ctx.restore();
 }
 
 function gameLoop(ts) {
@@ -1475,9 +1555,12 @@ function resizeCanvas() {
   const ctrlH = document.getElementById('mobile-controls').offsetHeight;
   const availW = window.innerWidth;
   const availH = window.innerHeight - ctrlH;
-  const scale  = Math.min(availW / W, availH / H);
-  canvas.style.width  = Math.floor(W * scale) + 'px';
-  canvas.style.height = Math.floor(H * scale) + 'px';
+  canvas.width  = availW;
+  canvas.height = availH;
+  canvas.style.width  = availW + 'px';
+  canvas.style.height = availH + 'px';
+  gameScaleX = availW / W;
+  gameScaleY = availH / H;
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
@@ -1494,6 +1577,18 @@ document.querySelectorAll('.ctrl-btn[data-key]').forEach(btn => {
   btn.addEventListener('mouseup',     () => release());
   btn.addEventListener('mouseleave',  () => release());
 });
+// ---------- INFO / HELP OVERLAY ----------
+(function() {
+  const overlay  = document.getElementById('help-overlay');
+  const infoBtn  = document.getElementById('info-btn');
+  const closeBtn = document.getElementById('help-close');
+  function showHelp(e) { e.preventDefault(); overlay.style.display = 'flex'; }
+  function hideHelp(e) { e.preventDefault(); overlay.style.display = 'none'; }
+  infoBtn.addEventListener('touchstart',  showHelp, { passive: false });
+  infoBtn.addEventListener('click',       showHelp);
+  closeBtn.addEventListener('touchstart', hideHelp, { passive: false });
+  closeBtn.addEventListener('click',      hideHelp);
+})();
 </script>
 </body>
 </html>
