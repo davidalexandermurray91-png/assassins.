@@ -231,13 +231,13 @@
     <div class="title-info">
       <h3>&#127919; Goal</h3>
       <p>Survive in a hotel. Earn money each day, buy weapons, survive assassins each night.</p>
-      <h3>&#9728; Day (60s) &mdash; E: work near NPCs &nbsp; C: buy near counters</h3>
+      <h3>&#9728; Day (60s) &mdash; Walk into NPCs to earn $10 &nbsp; C: buy near counters</h3>
       <p>Each job earns $10. Sword $30 (melee). Gun $50 (raycast, infinite range).</p>
       <h3>&#9790; Night (90s) &mdash; Left-click: attack &nbsp; H: hide near closets</h3>
       <p>Hiding sends your Companion to distract assassins for 12 s. Sprint (Shift) alerts ALL assassins!</p>
       <h3>&#128579; Controls</h3>
       <p>WASD: move &nbsp;&middot;&nbsp; Mouse: look (click to lock) &nbsp;&middot;&nbsp; Left-click: attack<br>
-         E: work &nbsp;&middot;&nbsp; C: buy &nbsp;&middot;&nbsp; H: hide &nbsp;&middot;&nbsp; Shift: sprint &#9888; &nbsp;&middot;&nbsp; Esc: unlock mouse</p>
+         Walk over workers to earn &nbsp;&middot;&nbsp; C: buy &nbsp;&middot;&nbsp; H: hide &nbsp;&middot;&nbsp; Shift: sprint &#9888; &nbsp;&middot;&nbsp; Esc: unlock mouse</p>
     </div>
     <div id="title-user"></div>
     <button class="start-btn" id="start-btn">&#9654;&nbsp; START</button>
@@ -336,11 +336,11 @@
     <p><b>H</b> &mdash; Near a dark closet: hide for 12 s. Companion distracts assassins.</p>
     <p><b>Shift &#9888;</b> &mdash; Sprint alerts ALL nearby assassins. Use as a last resort only.</p>
     <h3>&#9728; Day Activities</h3>
-    <p><b>E</b> &mdash; Near a green NPC worker: earn $10.</p>
+    <p>Walk into a green NPC worker to earn $10 (auto-pickup).</p>
     <p><b>C</b> &mdash; Near a shop counter: &#9876; Sword $30 &middot; &#128299; Gun $50.</p>
     <h3>&#128579; Controls</h3>
     <p>WASD: move &middot; Mouse: look (click game first to lock cursor)</p>
-    <p>Left-click: attack &middot; E: work &middot; C: buy &middot; H: hide &middot; Shift: sprint &middot; ESC: unlock mouse</p>
+    <p>Left-click: attack &middot; Walk into worker: earn &middot; C: buy &middot; H: hide &middot; Shift: sprint &middot; ESC: unlock mouse</p>
     <h3>&#128190; Account</h3>
     <p>Press ESC on the title screen to log in / create an account and save progress.</p>
   </div>
@@ -738,18 +738,19 @@ function spawnAssassins(n){for(let i=0;i<n;i++){const sx=3.75+Math.random()*17.5
 // ─── LIGHTING ────────────────────────────────────────
 function applyLighting() {
   if (phase==='day') {
-    ambLight.color.setHex(0x302010); ambLight.intensity=1.0;
-    playerLight.color.setHex(0xffcc88); playerLight.intensity=1.4; playerLight.distance=11;
-    scene.fog.color.setHex(0x2a1a08); scene.fog.density=0.07;
+    ambLight.color.setHex(0xfff0d8); ambLight.intensity=2.4;
+    playerLight.color.setHex(0xffe6bb); playerLight.intensity=0.8; playerLight.distance=14;
+    scene.fog.color.setHex(0xb8a888); scene.fog.density=0.012;
   } else if (phase==='night') {
-    ambLight.color.setHex(0x060310); ambLight.intensity=0.25;
-    playerLight.color.setHex(0xaa8855); playerLight.intensity=2.8; playerLight.distance=7;
-    scene.fog.color.setHex(0x050308); scene.fog.density=0.15;
+    ambLight.color.setHex(0x223044); ambLight.intensity=0.85;
+    playerLight.color.setHex(0xffd9aa); playerLight.intensity=3.4; playerLight.distance=11;
+    scene.fog.color.setHex(0x0a1018); scene.fog.density=0.07;
   } else {
-    ambLight.color.setHex(0x302015); ambLight.intensity=0.8;
-    playerLight.color.setHex(0xffaa55); playerLight.intensity=2.0; playerLight.distance=9;
-    scene.fog.color.setHex(0x1a0d04); scene.fog.density=0.10;
+    ambLight.color.setHex(0x6a4a30); ambLight.intensity=1.5;
+    playerLight.color.setHex(0xffcc88); playerLight.intensity=2.0; playerLight.distance=12;
+    scene.fog.color.setHex(0x4a2a10); scene.fog.density=0.04;
   }
+  renderer.setClearColor(scene.fog.color, 1);
 }
 
 // ─── INIT ────────────────────────────────────────────
@@ -905,8 +906,8 @@ function updatePlayer(dt) {
   if (clickFired||pressed('KeyX')||pressed('KeyZ')) { clickFired=false; doAttack(); }
   clickFired=false;
 
-  // Work (E)
-  if (pressed('KeyE')&&phase==='day') {
+  // Work — walk over a worker to collect $10 (per-worker cooldown)
+  if (phase==='day') {
     WORKERS.forEach(w=>{
       if (dist2(w,{x:playerPos.x,z:playerPos.z})<WORK_DIST&&w.cooldown<=0) {
         money+=10; w.cooldown=20; w.flash=2.5; snd.coin();
@@ -976,7 +977,7 @@ function updateHUD() {
   if (!isHiding) {
     const px=playerPos.x, pz=playerPos.z;
     if (phase==='day') {
-      for (const w of WORKERS) if(dist2(w,{x:px,z:pz})<WORK_DIST&&w.cooldown<=0){prompt='[E] Work (+$10)';break;}
+      for (const w of WORKERS) if(dist2(w,{x:px,z:pz})<WORK_DIST&&w.cooldown<=0){prompt='Walk into worker → +$10';break;}
       if (!prompt&&dist2(SWORD_SHOP,{x:px,z:pz})<SHOP_DIST+0.5) prompt=hasSword?'⚔ Sword: OWNED':'[C] Buy Sword — $'+SWORD_COST;
       if (!prompt&&dist2(GUN_SHOP,  {x:px,z:pz})<SHOP_DIST+0.5) prompt=hasGun  ?'🔫 Gun: OWNED'  :'[C] Buy Gun — $'+GUN_COST;
     } else if (phase==='night') {
