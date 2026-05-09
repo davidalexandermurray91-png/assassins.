@@ -650,8 +650,10 @@ class Assassin {
     const dx=tx-this.pos.x, dz=tz-this.pos.z, d=Math.hypot(dx,dz);
     if (d<0.08) return;
     const s=spd*dt, r=0.22;
-    if (!isWall(Math.floor(this.pos.x+dx/d*s+r*Math.sign(dx/d*s)), Math.floor(this.pos.z))) this.pos.x+=dx/d*s;
-    if (!isWall(Math.floor(this.pos.x), Math.floor(this.pos.z+dz/d*s+r*Math.sign(dz/d*s)))) this.pos.z+=dz/d*s;
+    const nx=dx/d*s, nz=dz/d*s;
+    // Use Math.sign(dx) / Math.sign(dz) to avoid sign-flip when dx/dz is near zero
+    if (!isWall(Math.floor(this.pos.x+nx+r*Math.sign(dx)), Math.floor(this.pos.z))) this.pos.x+=nx;
+    if (!isWall(Math.floor(this.pos.x), Math.floor(this.pos.z+nz+r*Math.sign(dz)))) this.pos.z+=nz;
     if (d>0.15) this.mesh.rotation.y=Math.atan2(tx-this.pos.x, tz-this.pos.z);
   }
   patrol(dt) {
@@ -804,11 +806,14 @@ function doGunShoot() {
   document.getElementById('muzzle-flash').classList.add('active');
   setTimeout(()=>document.getElementById('muzzle-flash').classList.remove('active'),80);
   ray.setFromCamera(new THREE.Vector2(0,0), camera);
-  const tgts = assassins.filter(a=>a.alive).flatMap(a=>a.mesh.children);
-  if (!tgts.length) return;
-  const hits = ray.intersectObjects(tgts, false);
+  // Intersect against assassin Groups recursively; find owning Assassin from hit object
+  const tgtGroups = assassins.filter(a=>a.alive).map(a=>a.mesh);
+  if (!tgtGroups.length) return;
+  const hits = ray.intersectObjects(tgtGroups, true);
   if (!hits.length) return;
-  const v = assassins.find(a=>a.alive&&a.mesh.children.includes(hits[0].object));
+  let hitObj = hits[0].object;
+  while (hitObj && !tgtGroups.includes(hitObj)) hitObj = hitObj.parent;
+  const v = assassins.find(a=>a.alive && a.mesh === hitObj);
   if (v) v.hit(1);
 }
 function doAttack() { if(hasGun) doGunShoot(); else if(hasSword) doSwordAttack(); }
