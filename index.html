@@ -1019,9 +1019,11 @@ function wrapText(text, maxW) {
 // VISUAL HELPERS – 3-D / Painterly style
 // =====================================================
 
-// Deterministic per-tile hash for subtle variation
+// Deterministic per-tile hash for subtle variation (prime multipliers for good distribution)
+const HASH_PRIME_1 = 374761393;
+const HASH_PRIME_2 = 668265263;
 function tileHash(col, row) {
-  return (((col * 374761393 + row * 668265263) >>> 0) % 1000) / 1000;
+  return (((col * HASH_PRIME_1 + row * HASH_PRIME_2) >>> 0) % 1000) / 1000;
 }
 
 // Draw one wall tile with brick texture + pseudo-3D top/right faces
@@ -1099,11 +1101,11 @@ function drawFloorTile(px, py, col, row) {
 
   let r, g, b;
   if (inLobby) {
-    r = 36 + (h * 10) | 0; g = 28 + (h * 8) | 0; b = 18 + (h * 5) | 0;
+    r = Math.floor(36 + h * 10); g = Math.floor(28 + h * 8); b = Math.floor(18 + h * 5);
   } else if (inTopRoom || inBotRoom) {
-    r = 28 + (h * 8) | 0; g = 23 + (h * 6) | 0; b = 17 + (h * 5) | 0;
+    r = Math.floor(28 + h * 8); g = Math.floor(23 + h * 6); b = Math.floor(17 + h * 5);
   } else {
-    r = 22 + (h * 6) | 0; g = 18 + (h * 5) | 0; b = 13 + (h * 4) | 0;
+    r = Math.floor(22 + h * 6); g = Math.floor(18 + h * 5); b = Math.floor(13 + h * 4);
   }
   ctx.fillStyle = `rgb(${r},${g},${b})`;
   ctx.fillRect(px, py, TILE, TILE);
@@ -1160,8 +1162,14 @@ function drawChar3D(cx, cy, radius, bodyC1, bodyC2, headC, eyeC1, eyeC2, jOff) {
 
   // 4. Eyes
   const eR = hR * 0.23;
-  if (eyeC1) { ctx.fillStyle = eyeC1; ctx.beginPath(); ctx.arc(cx - hR*0.38, hCY, eR, 0, Math.PI*2); ctx.fill(); }
-  if (eyeC2) { ctx.fillStyle = eyeC2; ctx.beginPath(); ctx.arc(cx + hR*0.38, hCY, eR, 0, Math.PI*2); ctx.fill(); }
+  if (eyeC1) {
+    ctx.fillStyle = eyeC1;
+    ctx.beginPath(); ctx.arc(cx - hR*0.38, hCY, eR, 0, Math.PI*2); ctx.fill();
+  }
+  if (eyeC2) {
+    ctx.fillStyle = eyeC2;
+    ctx.beginPath(); ctx.arc(cx + hR*0.38, hCY, eR, 0, Math.PI*2); ctx.fill();
+  }
 }
 
 // ---------- DRAW MAP ----------
@@ -1374,7 +1382,7 @@ function drawParticles() {
   for (const p of particles) {
     const a = Math.max(0, p.life / p.maxLife);
     const col = p.color;
-    // Simple: parse the rgb components from stored string and add alpha
+    // Use globalAlpha to control particle fade-out as life decreases
     ctx.globalAlpha = a;
     ctx.fillStyle = col;
     ctx.beginPath(); ctx.arc(p.x, p.y, p.r * a + 0.5, 0, Math.PI * 2); ctx.fill();
