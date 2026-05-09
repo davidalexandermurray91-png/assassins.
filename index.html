@@ -55,9 +55,12 @@
       gap: 3px;
     }
     .ctrl-btn {
-      background: #1c1c1c;
-      border: 2px solid #484848;
-      border-radius: 10px;
+      background: linear-gradient(145deg, #282828 0%, #141414 100%);
+      border: 1px solid #555;
+      border-bottom: 3px solid #0d0d0d;
+      border-right: 2px solid #1a1a1a;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
       color: #d0d0d0;
       font-family: 'Courier New', monospace;
       font-size: clamp(11px, 3.4vw, 15px);
@@ -71,27 +74,48 @@
       user-select: none;
       -webkit-user-select: none;
       touch-action: manipulation;
-      transition: background 0.06s, border-color 0.06s, transform 0.06s;
+      transition: all 0.07s;
     }
-    .ctrl-btn:active { background: #333; border-color: #999; transform: scale(0.93); }
+    .ctrl-btn:active {
+      background: linear-gradient(145deg, #141414 0%, #222 100%);
+      border-bottom: 1px solid #0d0d0d;
+      border-right: 1px solid #1a1a1a;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(0,0,0,0.2);
+      transform: translateY(2px);
+    }
     .btn-up    { grid-area: up; }
     .btn-left  { grid-area: left; }
-    .btn-gap   { grid-area: gap; background: transparent; border-color: transparent; pointer-events: none; }
+    .btn-gap   { grid-area: gap; background: transparent; border-color: transparent; border-bottom-color: transparent; border-right-color: transparent; box-shadow: none; pointer-events: none; }
     .btn-right { grid-area: right; }
     .btn-down  { grid-area: down; }
-    .act-jump   { color: #88aaff; border-color: #335588; }
-    .act-atk    { color: #ffaa44; border-color: #885522; }
-    .act-hide   { color: #44ff88; border-color: #226644; }
-    .act-use    { color: #ffff44; border-color: #666622; }
-    .act-buy    { color: #ffd700; border-color: #664400; }
-    .act-sprint { color: #ff7755; border-color: #662211; }
+    .act-jump   { color: #88aaff; border-color: #335588; border-bottom-color: #112244; }
+    .act-atk    { color: #ffaa44; border-color: #885522; border-bottom-color: #442800; }
+    .act-hide   { color: #44ff88; border-color: #226644; border-bottom-color: #0d3322; }
+    .act-use    { color: #ffff44; border-color: #666622; border-bottom-color: #333300; }
+    .act-buy    { color: #ffd700; border-color: #664400; border-bottom-color: #221500; }
+    .act-sprint { color: #ff7755; border-color: #662211; border-bottom-color: #220800; }
+    /* ── Mobile controls bar ── */
+    #mobile-controls {
+      background: linear-gradient(180deg, #111 0%, #0a0a0a 100%);
+      border-top: 1px solid #444;
+      box-shadow: 0 -4px 14px rgba(0,0,0,0.7);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 10px;
+      padding-bottom: max(5px, env(safe-area-inset-bottom, 5px));
+      gap: 6px;
+      flex-shrink: 0;
+    }
     /* ── Info button ── */
     #info-btn {
       font-size: clamp(18px, 5vw, 24px);
       align-self: center;
-      background: #1a1a1a;
-      border: 2px solid #555;
+      background: linear-gradient(145deg, #222, #111);
+      border: 1px solid #666;
+      border-bottom: 3px solid #0d0d0d;
       border-radius: 50%;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
       width: clamp(38px, 10vw, 52px);
       height: clamp(38px, 10vw, 52px);
       color: #aaa;
@@ -488,6 +512,7 @@ class Assassin {
             player.hp = Math.max(0, player.hp - 1);
             player.invincible = 0.9;
             snd.hit();
+            spawnParticles(player.x + player.w/2, player.y + player.h/2, '#4488ff', 8);
           }
         }
         return;
@@ -504,33 +529,31 @@ class Assassin {
   draw() {
     if (!this.alive) return;
 
+    const cx = this.x + this.w / 2, cy = this.y + this.h / 2;
+
     // Telegraph glow ring
     if (this.state === 'telegraph') {
-      const a = (Math.sin(Date.now() * 0.025) * 0.5 + 0.5);
-      ctx.beginPath();
-      ctx.arc(this.x + this.w/2, this.y + this.h/2, 34, 0, Math.PI*2);
-      ctx.fillStyle   = `rgba(255,80,0,${a*0.25})`;
-      ctx.fill();
-      ctx.strokeStyle = `rgba(255,60,0,${a})`;
-      ctx.lineWidth = 3; ctx.stroke();
+      const a = Math.sin(Date.now() * 0.025) * 0.5 + 0.5;
+      ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 18;
+      ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI*2);
+      ctx.strokeStyle = `rgba(255,80,0,${a})`; ctx.lineWidth = 3; ctx.stroke();
+      ctx.shadowBlur = 0;
     }
 
-    // Body
-    ctx.fillStyle = this.stunTimer > 0 ? '#884400' :
-                    (this.state === 'telegraph' ? '#ff3300' : '#cc0000');
-    ctx.fillRect(this.x, this.y, this.w, this.h);
-    ctx.strokeStyle = '#1a0000'; ctx.lineWidth = 2;
-    ctx.strokeRect(this.x, this.y, this.w, this.h);
+    const b1 = this.stunTimer > 0 ? '#aa6600' :
+                (this.state === 'telegraph' ? '#ff4400' : '#cc1100');
+    const b2 = this.stunTimer > 0 ? '#663300' :
+                (this.state === 'telegraph' ? '#880000' : '#550000');
+    const hC  = this.stunTimer > 0 ? '#dd8800' : '#880000';
 
-    // Red eye dot
-    ctx.fillStyle = '#ffaaaa';
-    ctx.fillRect(this.x + 4, this.y + 5, 4, 4);
-    ctx.fillRect(this.x + 12, this.y + 5, 4, 4);
+    drawChar3D(cx, cy, this.w * 0.54, b1, b2, hC, '#ff4444', '#ffaaaa', 0);
 
-    // Chase indicator
+    // Chase exclamation
     if (this.state === 'chase') {
-      ctx.fillStyle = '#ff4444'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
-      ctx.fillText('!', this.x + this.w/2, this.y - 9);
+      ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 8;
+      ctx.fillStyle = '#ff4444'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
+      ctx.fillText('!', cx, this.y - 10);
+      ctx.shadowBlur = 0;
     }
 
     // HP bar (only when damaged)
@@ -540,7 +563,7 @@ class Assassin {
     }
 
     ctx.fillStyle = '#ff7777'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
-    ctx.fillText('ASN', this.x + this.w/2, this.y - 14);
+    ctx.fillText('ASN', cx, this.y - 14);
   }
 }
 
@@ -565,6 +588,8 @@ let lastCountdownSec  = -1;
 let nightElapsed      = 0;
 let lastFrameTime     = 0;
 let bullets           = [];
+let particles         = [];
+let muzzleFlash       = 0;
 let gameScaleX = 1, gameScaleY = 1;
 
 // ---------- ACCOUNT SYSTEM ----------
@@ -669,10 +694,32 @@ function initGame(keepProgress) {
 
   assassins.length = 0;
   bullets.length   = 0;
+  particles.length = 0;
+  muzzleFlash      = 0;
 
   spawnSchedule = generateSpawnSchedule(nightsSurvived);
 
   gameState = 'playing';
+}
+
+// ---------- PARTICLES ----------
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.8 + Math.random() * 3.5;
+    const life  = 0.25 + Math.random() * 0.35;
+    particles.push({ x, y, dx: Math.cos(angle)*speed, dy: Math.sin(angle)*speed,
+                     life, maxLife: life, r: 1.5 + Math.random()*2.5, color });
+  }
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.dx; p.y += p.dy;
+    p.dx *= 0.88; p.dy *= 0.88;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
 }
 
 // ---------- SWORD ATTACK ----------
@@ -689,7 +736,8 @@ function doSwordAttack() {
     if (a.x < hx+hitW && a.x+a.w > hx && a.y < hy+hitH && a.y+a.h > hy) {
       a.hp--;
       a.stunTimer = 0.3;
-      if (a.hp <= 0) { a.alive = false; a.hp = 0; snd.enemyDie(); }
+      spawnParticles(a.x + a.w/2, a.y + a.h/2, '#cc2200', 7);
+      if (a.hp <= 0) { a.alive = false; a.hp = 0; snd.enemyDie(); spawnParticles(a.x + a.w/2, a.y + a.h/2, '#ff4400', 12); }
     }
   });
 }
@@ -706,7 +754,8 @@ function doJumpAttack() {
       const dmg = hasSword ? 2 : 1;
       a.hp -= dmg;
       a.stunTimer = 1.0;
-      if (a.hp <= 0) { a.alive = false; a.hp = 0; snd.enemyDie(); }
+      spawnParticles(a.x + a.w/2, a.y + a.h/2, '#cc2200', 10);
+      if (a.hp <= 0) { a.alive = false; a.hp = 0; snd.enemyDie(); spawnParticles(a.x + a.w/2, a.y + a.h/2, '#ff4400', 14); }
     }
   });
 }
@@ -716,6 +765,7 @@ function doGunShoot() {
   if (!hasGun || player.attackCooldown > 0) return;
   snd.gun();
   player.attackCooldown = 0.5;
+  muzzleFlash = 0.14;
   let bx = player.facingX, by = player.facingY;
   if (bx === 0 && by === 0) bx = 1;
   const speed = 14;
@@ -734,7 +784,8 @@ function updateBullets() {
       if (!a.alive) continue;
       if (b.x > a.x && b.x < a.x + a.w && b.y > a.y && b.y < a.y + a.h) {
         a.hp--; a.stunTimer = 0.1;
-        if (a.hp <= 0) { a.alive = false; a.hp = 0; snd.enemyDie(); }
+        spawnParticles(b.x, b.y, '#cc2200', 6);
+        if (a.hp <= 0) { a.alive = false; a.hp = 0; snd.enemyDie(); spawnParticles(a.x + a.w/2, a.y + a.h/2, '#ff4400', 12); }
         return false;
       }
     }
@@ -935,11 +986,13 @@ function updatePhase(dt) {
 // ---------- MAIN UPDATE ----------
 function update(dt) {
   if (gameState !== 'playing') return;
+  if (muzzleFlash > 0) muzzleFlash -= dt;
   updatePhase(dt);
   if (phase === 'dawn') return; // pause gameplay during dawn
   updatePlayer(dt);
   updateCompanion(dt);
   updateBullets();
+  updateParticles(dt);
   const runAlert = player.isRunning;
   assassins.forEach(a => a.update(dt, isHiding, companionDistract, runAlert));
 }
@@ -962,41 +1015,165 @@ function wrapText(text, maxW) {
   return lines;
 }
 
+// =====================================================
+// VISUAL HELPERS – 3-D / Painterly style
+// =====================================================
+
+// Deterministic per-tile hash for subtle variation
+function tileHash(col, row) {
+  return (((col * 374761393 + row * 668265263) >>> 0) % 1000) / 1000;
+}
+
+// Draw one wall tile with brick texture + pseudo-3D top/right faces
+function drawWallTile(px, py) {
+  const D = 6; // depth of 3-D extrusion
+
+  // ── Front face ──
+  const fg = ctx.createLinearGradient(px, py, px, py + TILE);
+  fg.addColorStop(0, '#52382a');
+  fg.addColorStop(0.5, '#3d2b1f');
+  fg.addColorStop(1, '#2a1d14');
+  ctx.fillStyle = fg;
+  ctx.fillRect(px, py, TILE, TILE);
+
+  // Brick rows (2 rows, staggered)
+  const BH = TILE / 2;
+  for (let br = 0; br < 2; br++) {
+    const by0 = py + br * BH;
+    const off  = (br % 2 === 0) ? 0 : TILE / 2;
+    // brick highlight
+    ctx.fillStyle = 'rgba(255,200,140,0.07)';
+    ctx.fillRect(px + off + 1, by0 + 1, TILE / 2 - 3, BH - 3);
+    if (off === 0) ctx.fillRect(px + TILE/2 + 1, by0 + 1, TILE/2 - 3, BH - 3);
+    // mortar horizontal
+    ctx.fillStyle = '#1c0e08';
+    ctx.fillRect(px, by0, TILE, 1);
+    // mortar vertical (staggered)
+    ctx.fillRect(px + off, by0, 1, BH);
+    ctx.fillRect(px + off + TILE/2, by0, 1, BH);
+  }
+  // top-left edge highlight on front face
+  ctx.strokeStyle = 'rgba(255,180,100,0.13)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(px, py + TILE); ctx.lineTo(px, py); ctx.lineTo(px + TILE, py);
+  ctx.stroke();
+
+  // ── Top face (lit) ──
+  const tg = ctx.createLinearGradient(px + D, py - D, px, py);
+  tg.addColorStop(0, '#9a6a44');
+  tg.addColorStop(1, '#5a3a20');
+  ctx.fillStyle = tg;
+  ctx.beginPath();
+  ctx.moveTo(px,           py);
+  ctx.lineTo(px + D,       py - D);
+  ctx.lineTo(px + TILE + D, py - D);
+  ctx.lineTo(px + TILE,    py);
+  ctx.closePath(); ctx.fill();
+  // top-face highlight line
+  ctx.strokeStyle = 'rgba(255,220,150,0.3)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(px + D, py - D); ctx.lineTo(px + TILE + D, py - D);
+  ctx.stroke();
+
+  // ── Right face (shadow) ──
+  const rg = ctx.createLinearGradient(px + TILE, py, px + TILE + D, py);
+  rg.addColorStop(0, '#1a1008');
+  rg.addColorStop(1, '#0a0604');
+  ctx.fillStyle = rg;
+  ctx.beginPath();
+  ctx.moveTo(px + TILE,         py);
+  ctx.lineTo(px + TILE + D,     py - D);
+  ctx.lineTo(px + TILE + D,     py + TILE - D);
+  ctx.lineTo(px + TILE,         py + TILE);
+  ctx.closePath(); ctx.fill();
+}
+
+// Draw one floor tile with stone/wood texture + subtle grout
+function drawFloorTile(px, py, col, row) {
+  const h = tileHash(col, row);
+  const inTopRoom = row >= 1 && row <= 4;
+  const inBotRoom = row >= 9 && row <= 12;
+  const inLobby   = row >= 13;
+
+  let r, g, b;
+  if (inLobby) {
+    r = 36 + (h * 10) | 0; g = 28 + (h * 8) | 0; b = 18 + (h * 5) | 0;
+  } else if (inTopRoom || inBotRoom) {
+    r = 28 + (h * 8) | 0; g = 23 + (h * 6) | 0; b = 17 + (h * 5) | 0;
+  } else {
+    r = 22 + (h * 6) | 0; g = 18 + (h * 5) | 0; b = 13 + (h * 4) | 0;
+  }
+  ctx.fillStyle = `rgb(${r},${g},${b})`;
+  ctx.fillRect(px, py, TILE, TILE);
+  // grout lines
+  ctx.strokeStyle = 'rgba(0,0,0,0.32)';
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+  // occasional subtle highlight (worn/glossy spot)
+  if (h > 0.88) {
+    ctx.fillStyle = 'rgba(255,255,255,0.025)';
+    ctx.fillRect(px + 3, py + 3, TILE - 6, Math.floor(TILE * 0.38));
+  }
+}
+
+// Draw a 3-D top-down character: shadow → body ellipse → head circle → eyes
+// cx/cy = entity centre, radius = body half-size, jOff = jump height offset (upward)
+function drawChar3D(cx, cy, radius, bodyC1, bodyC2, headC, eyeC1, eyeC2, jOff) {
+  jOff = jOff || 0;
+  const r   = radius;
+  const bY  = cy - jOff;
+  const hR  = r * 0.50;
+  const hCY = bY - r * 0.42;
+
+  // 1. Ground shadow (stays at floor level, grows when jumping)
+  ctx.fillStyle = `rgba(0,0,0,${jOff > 0 ? 0.28 : 0.38})`;
+  ctx.beginPath();
+  ctx.ellipse(cx + jOff * 0.35, cy + r * 0.48,
+              r * 0.88 + jOff * 0.18, r * 0.28 + jOff * 0.07, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2. Body (top-down ellipse with radial gradient for spherical look)
+  const bg = ctx.createRadialGradient(cx - r*0.28, bY - r*0.25, r*0.05,
+                                       cx,          bY,          r * 1.15);
+  bg.addColorStop(0, bodyC1);
+  bg.addColorStop(1, bodyC2);
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.ellipse(cx, bY, r, r * 0.76, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.44)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // 3. Head circle
+  const hg = ctx.createRadialGradient(cx - hR*0.3, hCY - hR*0.3, hR*0.08,
+                                       cx,          hCY,           hR * 1.05);
+  hg.addColorStop(0, headC);
+  hg.addColorStop(0.55, bodyC1);
+  hg.addColorStop(1, bodyC2);
+  ctx.fillStyle = hg;
+  ctx.beginPath(); ctx.arc(cx, hCY, hR, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // 4. Eyes
+  const eR = hR * 0.23;
+  if (eyeC1) { ctx.fillStyle = eyeC1; ctx.beginPath(); ctx.arc(cx - hR*0.38, hCY, eR, 0, Math.PI*2); ctx.fill(); }
+  if (eyeC2) { ctx.fillStyle = eyeC2; ctx.beginPath(); ctx.arc(cx + hR*0.38, hCY, eR, 0, Math.PI*2); ctx.fill(); }
+}
+
 // ---------- DRAW MAP ----------
 function drawMap() {
-  const depth = 5;
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
       const ch = MAP[row][col];
       const px = col * TILE, py = row * TILE;
       if (ch === 'W') {
-        // Front face
-        ctx.fillStyle = '#3d2b1f'; ctx.fillRect(px, py, TILE, TILE);
-        ctx.fillStyle = '#52382a'; ctx.fillRect(px+2, py+2, TILE-4, TILE-4);
-        ctx.fillStyle = '#2a1d14'; ctx.fillRect(px, py, TILE, 2); ctx.fillRect(px, py, 2, TILE);
-        // Pseudo-3D top face
-        ctx.fillStyle = '#6b4c38';
-        ctx.beginPath();
-        ctx.moveTo(px,           py);
-        ctx.lineTo(px + depth,   py - depth);
-        ctx.lineTo(px + TILE + depth, py - depth);
-        ctx.lineTo(px + TILE,    py);
-        ctx.closePath(); ctx.fill();
-        // Pseudo-3D right face
-        ctx.fillStyle = '#241a10';
-        ctx.beginPath();
-        ctx.moveTo(px + TILE,         py);
-        ctx.lineTo(px + TILE + depth, py - depth);
-        ctx.lineTo(px + TILE + depth, py + TILE - depth);
-        ctx.lineTo(px + TILE,         py + TILE);
-        ctx.closePath(); ctx.fill();
+        drawWallTile(px, py);
       } else {
-        const inTopRoom = row >= 1 && row <= 4;
-        const inBotRoom = row >= 9 && row <= 12;
-        ctx.fillStyle = (inTopRoom || inBotRoom) ? '#1e1a14' : '#17140f';
-        ctx.fillRect(px, py, TILE, TILE);
-        ctx.strokeStyle = '#211d17'; ctx.lineWidth = 0.5;
-        ctx.strokeRect(px, py, TILE, TILE);
+        drawFloorTile(px, py, col, row);
       }
     }
   }
@@ -1004,33 +1181,63 @@ function drawMap() {
 
 // ---------- DRAW STATIC OBJECTS ----------
 function drawObjects() {
-  // Hiding spots
+  // Hiding spots – dark wooden closets with 3-D cabinet look
   hidingSpots.forEach(s => {
-    ctx.fillStyle = '#090707'; ctx.fillRect(s.x, s.y, s.w, s.h);
-    ctx.strokeStyle = '#3a2a1e'; ctx.lineWidth = 1; ctx.strokeRect(s.x, s.y, s.w, s.h);
-    ctx.fillStyle = '#443322'; ctx.font = '7px monospace'; ctx.textAlign = 'center';
-    ctx.fillText('HIDE', s.x + s.w/2, s.y + s.h/2 + 3);
+    const cx = s.x + s.w / 2;
+    // Cabinet body gradient
+    const cg = ctx.createLinearGradient(s.x, s.y, s.x + s.w, s.y + s.h);
+    cg.addColorStop(0, '#1c1108'); cg.addColorStop(0.5, '#0f0a04'); cg.addColorStop(1, '#070402');
+    ctx.fillStyle = cg; ctx.fillRect(s.x, s.y, s.w, s.h);
+    // Door panels
+    ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = 1;
+    ctx.strokeRect(s.x + 3, s.y + 3, s.w/2 - 5, s.h - 6);
+    ctx.strokeRect(s.x + s.w/2 + 2, s.y + 3, s.w/2 - 5, s.h - 6);
+    // Door knobs
+    ctx.fillStyle = '#5a3e28';
+    ctx.beginPath(); ctx.arc(s.x + s.w/2 - 3, s.y + s.h/2, 2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s.x + s.w/2 + 3, s.y + s.h/2, 2, 0, Math.PI*2); ctx.fill();
+    // 3-D top face
+    ctx.fillStyle = '#2a1c0e';
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y); ctx.lineTo(s.x + 4, s.y - 4);
+    ctx.lineTo(s.x + s.w + 4, s.y - 4); ctx.lineTo(s.x + s.w, s.y);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#3a2a18'; ctx.lineWidth = 1; ctx.strokeRect(s.x, s.y, s.w, s.h);
+    ctx.fillStyle = '#554433'; ctx.font = '7px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('HIDE', cx, s.y + s.h/2 + 3);
     if (phase === 'night') {
-      ctx.fillStyle = '#006633'; ctx.font = '7px monospace';
-      ctx.fillText('[H]', s.x + s.w/2, s.y - 3);
+      ctx.fillStyle = '#00cc66'; ctx.font = '7px monospace';
+      ctx.fillText('[H]', cx, s.y - 7);
     }
   });
 
   // Sword shop counter
-  ctx.fillStyle = '#7a5800'; ctx.fillRect(swordShop.x, swordShop.y, swordShop.w, swordShop.h);
+  const sg = ctx.createLinearGradient(swordShop.x, swordShop.y, swordShop.x, swordShop.y + swordShop.h);
+  sg.addColorStop(0, '#b08800'); sg.addColorStop(1, '#5a4400');
+  ctx.fillStyle = sg; ctx.fillRect(swordShop.x, swordShop.y, swordShop.w, swordShop.h);
+  ctx.fillStyle = '#7a5a00';
+  ctx.fillRect(swordShop.x, swordShop.y + swordShop.h, swordShop.w, 5);
   ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.strokeRect(swordShop.x, swordShop.y, swordShop.w, swordShop.h);
+  ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 8;
   ctx.fillStyle = '#ffd700'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
   ctx.fillText('⚔ SWORD', swordShop.x + swordShop.w/2, swordShop.y + 14);
   ctx.fillText('SHOP $30', swordShop.x + swordShop.w/2, swordShop.y + 26);
+  ctx.shadowBlur = 0;
   ctx.fillStyle = hasSword ? '#666' : '#ffd700';
   ctx.fillText(hasSword ? '[OWNED]' : '[C] BUY', swordShop.x + swordShop.w/2, swordShop.y + 38);
 
   // Gun shop counter
-  ctx.fillStyle = '#1a3a1a'; ctx.fillRect(gunShop.x, gunShop.y, gunShop.w, gunShop.h);
+  const gg = ctx.createLinearGradient(gunShop.x, gunShop.y, gunShop.x, gunShop.y + gunShop.h);
+  gg.addColorStop(0, '#1a5a1a'); gg.addColorStop(1, '#0d2e0d');
+  ctx.fillStyle = gg; ctx.fillRect(gunShop.x, gunShop.y, gunShop.w, gunShop.h);
+  ctx.fillStyle = '#0d3a0d';
+  ctx.fillRect(gunShop.x, gunShop.y + gunShop.h, gunShop.w, 5);
   ctx.strokeStyle = '#44ff44'; ctx.lineWidth = 2; ctx.strokeRect(gunShop.x, gunShop.y, gunShop.w, gunShop.h);
+  ctx.shadowColor = '#44ff44'; ctx.shadowBlur = 8;
   ctx.fillStyle = '#44ff44'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
   ctx.fillText('🔫 GUN', gunShop.x + gunShop.w/2, gunShop.y + 14);
   ctx.fillText(`SHOP $${GUN_COST}`, gunShop.x + gunShop.w/2, gunShop.y + 26);
+  ctx.shadowBlur = 0;
   ctx.fillStyle = hasGun ? '#666' : '#44ff44';
   ctx.fillText(hasGun ? '[OWNED]' : '[C] BUY', gunShop.x + gunShop.w/2, gunShop.y + 38);
 }
@@ -1038,59 +1245,55 @@ function drawObjects() {
 // ---------- DRAW WORKERS ----------
 function drawWorkers() {
   workers.forEach(w => {
-    ctx.fillStyle = '#22aa22'; ctx.fillRect(w.x, w.y, w.w, w.h);
-    ctx.strokeStyle = '#115511'; ctx.lineWidth = 1; ctx.strokeRect(w.x, w.y, w.w, w.h);
-    // Hat-like top
-    ctx.fillStyle = '#33cc33'; ctx.fillRect(w.x+3, w.y-3, w.w-6, 5);
+    const cx = w.x + w.w / 2, cy = w.y + w.h / 2;
+    drawChar3D(cx, cy, w.w * 0.54, '#22aa22', '#115511', '#44cc44', '#aaffaa', '#88ff88', 0);
     ctx.fillStyle = '#44ff44'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
-    ctx.fillText('NPC', w.x + w.w/2, w.y - 6);
+    ctx.fillText('NPC', cx, w.y - 5);
     if (phase === 'day') {
       const label = w.cooldown > 0 ? `${Math.ceil(w.cooldown)}s` : '[E]$10';
-      ctx.fillStyle = w.cooldown > 0 ? '#888' : '#ffff44';
-      ctx.font = '8px monospace'; ctx.fillText(label, w.x + w.w/2, w.y + w.h + 11);
+      ctx.fillStyle = w.cooldown > 0 ? '#777' : '#ffff44';
+      ctx.font = '8px monospace'; ctx.fillText(label, cx, w.y + w.h + 11);
     }
     if (w.flash > 0) {
+      ctx.shadowColor = '#ffff00'; ctx.shadowBlur = 8;
       ctx.fillStyle = '#ffff00'; ctx.font = 'bold 13px monospace';
-      ctx.fillText('+$10', w.x + w.w/2, w.y - 18);
+      ctx.fillText('+$10', cx, w.y - 18);
+      ctx.shadowBlur = 0;
     }
   });
 }
 
 // ---------- DRAW COMPANION ----------
 function drawCompanion() {
-  ctx.fillStyle = '#0099bb'; ctx.fillRect(companion.x, companion.y, companion.w, companion.h);
-  ctx.strokeStyle = '#006688'; ctx.lineWidth = 1; ctx.strokeRect(companion.x, companion.y, companion.w, companion.h);
-  // Eyes
-  ctx.fillStyle = '#ccffff';
-  ctx.fillRect(companion.x+3, companion.y+4, 4, 4);
-  ctx.fillRect(companion.x+11, companion.y+4, 4, 4);
+  const cx = companion.x + companion.w / 2, cy = companion.y + companion.h / 2;
+  drawChar3D(cx, cy, companion.w * 0.54, '#0099bb', '#005577', '#33ccee', '#ccffff', '#aaddee', 0);
   ctx.fillStyle = '#00ddff'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('CMP', companion.x + companion.w/2, companion.y - 5);
+  ctx.fillText('CMP', cx, companion.y - 5);
   if (companion.state === 'distract') {
-    ctx.fillStyle = '#ff00ff'; ctx.font = 'bold 9px monospace';
-    ctx.fillText('DIST!', companion.x + companion.w/2, companion.y - 16);
+    ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 6;
+    ctx.fillStyle = '#ff44ff'; ctx.font = 'bold 9px monospace';
+    ctx.fillText('DIST!', cx, companion.y - 16);
+    ctx.shadowBlur = 0;
   }
 }
 
 // ---------- DRAW DOCTOR ----------
 function drawDoctor() {
   if (!doctor.visible) return;
-  ctx.fillStyle = '#e8e8e8'; ctx.fillRect(doctor.x, doctor.y, doctor.w, doctor.h);
-  ctx.strokeStyle = '#999'; ctx.lineWidth = 1; ctx.strokeRect(doctor.x, doctor.y, doctor.w, doctor.h);
-  // Red cross on coat
-  ctx.fillStyle = '#cc0000';
-  ctx.fillRect(doctor.x + doctor.w/2 - 1, doctor.y + 4, 3, 9);
-  ctx.fillRect(doctor.x + doctor.w/2 - 4, doctor.y + 7, 9, 3);
+  const cx = doctor.x + doctor.w / 2, cy = doctor.y + doctor.h / 2;
+  drawChar3D(cx, cy, doctor.w * 0.54, '#dddddd', '#888888', '#ffffff', '#cc0000', '#cc0000', 0);
   ctx.fillStyle = '#ffffff'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('DOC', doctor.x + doctor.w/2, doctor.y - 5);
+  ctx.fillText('DOC', cx, doctor.y - 5);
 
   if (doctor.dialog) {
     const lines = wrapText(doctor.dialog, 185);
     const bW = 210, lH = 14, bH = lines.length * lH + 18;
     let bx = clamp(doctor.x - 96, 6, W - bW - 6);
     let by = doctor.y - bH - 8; if (by < 6) by = doctor.y + doctor.h + 8;
-    ctx.fillStyle = 'rgba(0,0,0,0.88)'; ctx.fillRect(bx, by, bW, bH);
-    ctx.strokeStyle = '#dddddd'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bW, bH);
+    const dg = ctx.createLinearGradient(bx, by, bx, by + bH);
+    dg.addColorStop(0, 'rgba(22,22,22,0.96)'); dg.addColorStop(1, 'rgba(8,8,8,0.96)');
+    ctx.fillStyle = dg; ctx.fillRect(bx, by, bW, bH);
+    ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bW, bH);
     ctx.fillStyle = '#ffffff'; ctx.font = '10px monospace'; ctx.textAlign = 'left';
     lines.forEach((l, i) => ctx.fillText(l, bx + 8, by + 14 + i * lH));
   }
@@ -1101,72 +1304,121 @@ function drawPlayer() {
   // Flash during invincibility
   if (player.invincible > 0 && Math.floor(player.invincible * 12) % 2 === 0) return;
 
-  const px = player.x, py = player.y, pw = player.w, ph = player.h;
-  const drawPY = player.isJumping ? py - 9 : py;
+  const pw = player.w, ph = player.h;
+  const cx = player.x + pw / 2;
+  const cy = player.y + ph / 2;
+  const jOff = player.isJumping ? 12 : 0;
 
-  if (player.isJumping) {
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath(); ctx.ellipse(px + pw/2, py + ph + 2, pw/2 + 2, 5, 0, 0, Math.PI*2); ctx.fill();
-  }
-
-  ctx.fillStyle = player.isJumping ? '#5599ff' : '#2266dd';
-  ctx.fillRect(px, drawPY, pw + (player.isJumping ? 4 : 0), ph + (player.isJumping ? 4 : 0));
-  ctx.strokeStyle = '#aaccff'; ctx.lineWidth = 2;
-  ctx.strokeRect(px, drawPY, pw + (player.isJumping ? 4 : 0), ph + (player.isJumping ? 4 : 0));
-
-  // Eye (facing direction indicator)
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(px + pw/2 + player.facingX * 5 - 3, drawPY + ph/2 + player.facingY * 5 - 3, 6, 6);
-
-  // Sword swing arc
+  // Sword swing arc (drawn before the character so it appears underneath)
   if (player.attackTimer > 0 && hasSword) {
-    const hx = px + pw/2 + player.facingX * 32 - 12;
-    const hy = drawPY + ph/2 + player.facingY * 32 - 12;
-    ctx.fillStyle = 'rgba(220,220,60,0.75)'; ctx.fillRect(hx, hy, 24, 24);
-    ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 2; ctx.strokeRect(hx, hy, 24, 24);
-    ctx.beginPath();
-    ctx.moveTo(px + pw/2, drawPY + ph/2);
-    ctx.lineTo(px + pw/2 + player.facingX * 42, drawPY + ph/2 + player.facingY * 42);
-    ctx.strokeStyle = '#dddd44'; ctx.lineWidth = 3; ctx.stroke();
+    const hx = cx + player.facingX * 34;
+    const hy = (cy - jOff) + player.facingY * 34;
+    ctx.shadowColor = '#ffee00'; ctx.shadowBlur = 12;
+    ctx.strokeStyle = '#dddd44'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx, cy - jOff); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.lineCap = 'butt';
+    const swG = ctx.createRadialGradient(hx, hy, 1, hx, hy, 18);
+    swG.addColorStop(0, 'rgba(255,255,120,0.88)');
+    swG.addColorStop(1, 'rgba(220,180,0,0)');
+    ctx.fillStyle = swG;
+    ctx.beginPath(); ctx.arc(hx, hy, 18, 0, Math.PI * 2); ctx.fill();
   }
+
+  // 3-D character
+  const b1 = player.isJumping ? '#77aaff' : '#4488ee';
+  const b2 = player.isJumping ? '#3366cc' : '#1a4499';
+  drawChar3D(cx, cy, pw * 0.56, b1, b2, '#aadfff', '#ffffff', '#ddeeff', jOff);
+
+  // Facing direction dot on head
+  const hR   = pw * 0.56 * 0.5;
+  const hCY  = (cy - jOff) - pw * 0.56 * 0.42;
+  const dotX = cx + player.facingX * hR * 0.85;
+  const dotY = hCY + player.facingY * hR * 0.7;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(dotX, dotY, 2.5, 0, Math.PI * 2); ctx.fill();
 
   // Labels
+  const labelY = player.y - jOff * 0.65;
   ctx.fillStyle = '#aaccff'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('YOU', px + pw/2, drawPY - 4);
+  ctx.fillText('YOU', cx, labelY - 4);
 
-  // Mini HP bar above
-  const bW = 36, bX = px + pw/2 - bW/2;
-  ctx.fillStyle = '#330000'; ctx.fillRect(bX, drawPY - 10, bW, 4);
-  ctx.fillStyle = '#cc0000'; ctx.fillRect(bX, drawPY - 10, bW * (player.hp / player.maxHp), 4);
+  // Mini HP bar
+  const bW = 36, bX = cx - bW / 2;
+  ctx.fillStyle = '#330000'; ctx.fillRect(bX, labelY - 11, bW, 4);
+  ctx.fillStyle = '#cc0000'; ctx.fillRect(bX, labelY - 11, bW * (player.hp / player.maxHp), 4);
 
   if (player.isRunning) {
+    ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 6;
     ctx.fillStyle = '#ff8800'; ctx.font = 'bold 10px monospace';
-    ctx.fillText('RUN!', px + pw/2, drawPY - 16);
+    ctx.fillText('RUN!', cx, labelY - 17);
+    ctx.shadowBlur = 0;
   }
+}
+
+// ---------- DRAW MUZZLE FLASH ----------
+function drawMuzzleFlash() {
+  if (muzzleFlash <= 0) return;
+  const cx = player.x + player.w/2 + player.facingX * 22;
+  const cy = player.y + player.h/2 + player.facingY * 22;
+  const a = muzzleFlash / 0.14;
+  const mg = ctx.createRadialGradient(cx, cy, 0, cx, cy, 18);
+  mg.addColorStop(0, `rgba(255,255,200,${a})`);
+  mg.addColorStop(0.35, `rgba(255,180,50,${a * 0.6})`);
+  mg.addColorStop(1, 'rgba(255,100,0,0)');
+  ctx.fillStyle = mg;
+  ctx.beginPath(); ctx.arc(cx, cy, 18, 0, Math.PI * 2); ctx.fill();
+}
+
+// ---------- DRAW PARTICLES ----------
+function drawParticles() {
+  for (const p of particles) {
+    const a = Math.max(0, p.life / p.maxLife);
+    const col = p.color;
+    // Simple: parse the rgb components from stored string and add alpha
+    ctx.globalAlpha = a;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * a + 0.5, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 // ---------- DRAW BULLETS ----------
 function drawBullets() {
+  ctx.lineCap = 'round';
   bullets.forEach(b => {
-    ctx.fillStyle = '#ffdd00';
-    ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,200,0,0.4)';
-    ctx.beginPath(); ctx.arc(b.x - b.dx*0.3, b.y - b.dy*0.3, 2, 0, Math.PI*2); ctx.fill();
+    // Tracer trail
+    const tg = ctx.createLinearGradient(b.x - b.dx * 3, b.y - b.dy * 3, b.x, b.y);
+    tg.addColorStop(0, 'rgba(255,180,0,0)');
+    tg.addColorStop(1, 'rgba(255,240,100,0.85)');
+    ctx.strokeStyle = tg; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(b.x - b.dx * 3, b.y - b.dy * 3);
+    ctx.lineTo(b.x, b.y); ctx.stroke();
+    // Glowing core
+    ctx.shadowColor = '#ffee00'; ctx.shadowBlur = 7;
+    ctx.fillStyle = '#ffffcc';
+    ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
   });
+  ctx.lineCap = 'butt';
 }
 
 // ---------- DRAW DAWN OVERLAY ----------
 function drawDawnOverlay() {
   const t = 1 - dawnTimer / DAWN_DUR;
-  ctx.fillStyle = `rgba(255,200,50,${0.3 + t * 0.35})`;
-  ctx.fillRect(0, 0, W, GAME_H);
-  ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 20;
-  ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 36px monospace'; ctx.textAlign = 'center';
+  const dg = ctx.createRadialGradient(W/2, 0, 0, W/2, GAME_H * 0.6, 700);
+  dg.addColorStop(0,   `rgba(255,210,60,${0.45 + t * 0.3})`);
+  dg.addColorStop(0.55, `rgba(255,130,20,${0.2 + t * 0.2})`);
+  dg.addColorStop(1,   `rgba(100,50,0,${0.05 + t * 0.08})`);
+  ctx.fillStyle = dg; ctx.fillRect(0, 0, W, GAME_H);
+
+  ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 35;
+  ctx.fillStyle = '#ffee66'; ctx.font = 'bold 36px monospace'; ctx.textAlign = 'center';
   ctx.fillText('DAWN BREAKS!', W/2, GAME_H/2 - 30);
-  ctx.shadowBlur = 0;
+  ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 12;
   ctx.fillStyle = '#ffffff'; ctx.font = '20px monospace';
   ctx.fillText(`Night ${nightsSurvived} survived!`, W/2, GAME_H/2 + 15);
+  ctx.shadowBlur = 0;
   ctx.fillStyle = '#ddaa44'; ctx.font = '13px monospace';
   ctx.fillText('A new day begins...', W/2, GAME_H/2 + 48);
 }
@@ -1176,8 +1428,9 @@ function drawFogOfWar() {
   const cx = player.x + player.w / 2;
   const cy = player.y + player.h / 2;
 
+  // Dark blue-tinted atmospheric fog
   fogCtx.globalCompositeOperation = 'source-over';
-  fogCtx.fillStyle = 'rgba(0,0,0,0.93)';
+  fogCtx.fillStyle = 'rgba(5,2,18,0.95)';
   fogCtx.fillRect(0, 0, W, GAME_H);
 
   fogCtx.globalCompositeOperation = 'destination-out';
@@ -1205,71 +1458,108 @@ function drawFogOfWar() {
 
   fogCtx.globalCompositeOperation = 'source-over';
   ctx.drawImage(fogCanvas, 0, 0);
+
+  // Soft vignette at visibility edge for a glowing lantern feel
+  const vig = ctx.createRadialGradient(cx, cy, VIS_RADIUS * 0.6, cx, cy, VIS_RADIUS * 1.1);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(5,2,18,0.55)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, GAME_H);
 }
 
 // ---------- DRAW HUD ----------
 function drawHUD() {
   // ── Health (top-left) ──
-  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(5, 5, 148, 30);
+  const hpBg = ctx.createLinearGradient(5, 5, 5, 35);
+  hpBg.addColorStop(0, 'rgba(0,0,0,0.82)'); hpBg.addColorStop(1, 'rgba(25,0,0,0.82)');
+  ctx.fillStyle = hpBg; ctx.fillRect(5, 5, 148, 30);
+  ctx.strokeStyle = '#330000'; ctx.lineWidth = 1; ctx.strokeRect(5, 5, 148, 30);
   ctx.fillStyle = '#aaaaaa'; ctx.font = '13px monospace'; ctx.textAlign = 'left';
   ctx.fillText('HP:', 12, 25);
   for (let i = 0; i < player.maxHp; i++) {
+    if (i < player.hp) { ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 6; }
     ctx.fillStyle = i < player.hp ? '#ff2244' : '#331122';
     ctx.fillText('♥', 48 + i * 19, 25);
+    ctx.shadowBlur = 0;
   }
 
   // ── Money + weapons (top-right) ──
-  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(W - 165, 5, 160, 72);
+  const monBg = ctx.createLinearGradient(W-165, 5, W-165, 77);
+  monBg.addColorStop(0, 'rgba(0,0,0,0.82)'); monBg.addColorStop(1, 'rgba(12,6,0,0.82)');
+  ctx.fillStyle = monBg; ctx.fillRect(W - 165, 5, 160, 72);
+  ctx.strokeStyle = '#332200'; ctx.lineWidth = 1; ctx.strokeRect(W - 165, 5, 160, 72);
+  ctx.shadowColor = '#ffdd00'; ctx.shadowBlur = 6;
   ctx.fillStyle = '#ffdd00'; ctx.font = '13px monospace'; ctx.textAlign = 'left';
   ctx.fillText('$' + money, W - 155, 23);
+  ctx.shadowBlur = 0;
   ctx.fillStyle = hasSword ? '#66ff66' : '#ff5555';
   ctx.fillText('SWORD: ' + (hasSword ? 'YES ⚔' : 'NO'), W - 155, 42);
   ctx.fillStyle = hasGun ? '#66ff66' : '#ff5555';
   ctx.fillText('GUN: '   + (hasGun   ? 'YES 🔫' : 'NO'), W - 155, 58);
-  ctx.fillStyle = '#888'; ctx.font = '10px monospace';
+  ctx.fillStyle = '#777'; ctx.font = '10px monospace';
   ctx.fillText(`Nights: ${nightsSurvived}`, W - 155, 72);
 
   // ── Phase timer (top-center) ──
-  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(W/2 - 105, 5, 210, 50);
+  const phaseColor = phase === 'day' ? '#ffdd44' : (phase === 'dawn' ? '#ffaa44' : '#bb44ff');
+  const phBg = ctx.createLinearGradient(W/2-105, 5, W/2-105, 55);
+  phBg.addColorStop(0, 'rgba(0,0,0,0.85)'); phBg.addColorStop(1, 'rgba(5,0,15,0.85)');
+  ctx.fillStyle = phBg; ctx.fillRect(W/2 - 105, 5, 210, 50);
+  ctx.strokeStyle = phaseColor + '55'; ctx.lineWidth = 1; ctx.strokeRect(W/2 - 105, 5, 210, 50);
   const phaseLabel = phase === 'day' ? '☀ DAY' : (phase === 'dawn' ? '🌅 DAWN' : '☾ NIGHT');
-  ctx.fillStyle = phase === 'day' ? '#ffdd44' : (phase === 'dawn' ? '#ffaa44' : '#bb44ff');
-  ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center';
+  ctx.shadowColor = phaseColor; ctx.shadowBlur = 10;
+  ctx.fillStyle = phaseColor; ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center';
   ctx.fillText(phaseLabel, W/2, 24);
+  ctx.shadowBlur = 0;
   const tl = Math.ceil(phaseTime);
-  ctx.fillStyle = tl < 15 ? '#ff4444' : '#ffffff';
-  ctx.font = '12px monospace';
+  ctx.fillStyle = tl < 15 ? '#ff4444' : '#ffffff'; ctx.font = '12px monospace';
   ctx.fillText(phase === 'day' ? `Night in: ${tl}s` : (phase === 'dawn' ? 'New day...' : `Dawn in: ${tl}s`), W/2, 43);
 
   // ── Running warning ──
   if (runWarningTimer > 0) {
     const a = Math.min(1, runWarningTimer);
-    ctx.fillStyle = `rgba(160,0,0,${a*0.75})`; ctx.fillRect(W/2-235, 62, 470, 32);
-    ctx.fillStyle = `rgba(255,100,80,${a})`;
+    const rwBg = ctx.createLinearGradient(W/2-235, 62, W/2-235, 94);
+    rwBg.addColorStop(0, `rgba(200,0,0,${a*0.82})`); rwBg.addColorStop(1, `rgba(100,0,0,${a*0.7})`);
+    ctx.fillStyle = rwBg; ctx.fillRect(W/2-235, 62, 470, 32);
+    ctx.strokeStyle = `rgba(255,100,80,${a*0.5})`; ctx.lineWidth = 1;
+    ctx.strokeRect(W/2-235, 62, 470, 32);
+    ctx.shadowColor = '#ff4422'; ctx.shadowBlur = 7;
+    ctx.fillStyle = `rgba(255,160,120,${a})`;
     ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center';
     ctx.fillText('⚠ RUNNING DETECTED — Assassins alerted!', W/2, 82);
+    ctx.shadowBlur = 0;
   }
 
   // ── Hiding status ──
   if (isHiding) {
-    ctx.fillStyle = 'rgba(0,40,0,0.82)'; ctx.fillRect(W/2-215, H/2-18, 430, 36);
+    const hidBg = ctx.createLinearGradient(W/2-215, H/2-18, W/2-215, H/2+18);
+    hidBg.addColorStop(0, 'rgba(0,55,20,0.92)'); hidBg.addColorStop(1, 'rgba(0,22,10,0.92)');
+    ctx.fillStyle = hidBg; ctx.fillRect(W/2-215, H/2-18, 430, 36);
+    ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 9;
     ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 1; ctx.strokeRect(W/2-215, H/2-18, 430, 36);
     ctx.fillStyle = '#00ff88'; ctx.font = '13px monospace'; ctx.textAlign = 'center';
     ctx.fillText(`HIDING… Companion distracting them! (${Math.ceil(hideTimeLeft)}s or [H])`, W/2, H/2+6);
+    ctx.shadowBlur = 0;
   }
 
   // ── Night-start overlay ──
   if (nightWarningTimer > 0) {
     const a = Math.min(1, nightWarningTimer * 0.4);
-    ctx.fillStyle = `rgba(60,0,0,${a*0.55})`; ctx.fillRect(0, 0, W, GAME_H);
+    const nightOvG = ctx.createRadialGradient(W/2, GAME_H/2, 60, W/2, GAME_H/2, 420);
+    nightOvG.addColorStop(0, `rgba(100,0,0,${a*0.3})`);
+    nightOvG.addColorStop(1, `rgba(55,0,0,${a*0.62})`);
+    ctx.fillStyle = nightOvG; ctx.fillRect(0, 0, W, GAME_H);
+    ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 22;
     ctx.fillStyle = `rgba(255,50,50,${a})`;
     ctx.font = 'bold 30px monospace'; ctx.textAlign = 'center';
     ctx.fillText('NIGHT HAS FALLEN', W/2, GAME_H/2 - 24);
+    ctx.shadowBlur = 0;
     ctx.font = 'bold 17px monospace';
     ctx.fillText('Assassins are here!', W/2, GAME_H/2 + 12);
 
-    // Survival options panel (first 4 seconds)
     if (nightWarningTimer > 1) {
-      ctx.fillStyle = 'rgba(0,0,0,0.78)'; ctx.fillRect(W/2-215, GAME_H/2+40, 430, 95);
+      const panBg = ctx.createLinearGradient(W/2-215, GAME_H/2+40, W/2-215, GAME_H/2+135);
+      panBg.addColorStop(0, 'rgba(0,0,0,0.88)'); panBg.addColorStop(1, 'rgba(22,0,0,0.88)');
+      ctx.fillStyle = panBg; ctx.fillRect(W/2-215, GAME_H/2+40, 430, 95);
       ctx.strokeStyle = '#aa4444'; ctx.lineWidth = 1; ctx.strokeRect(W/2-215, GAME_H/2+40, 430, 95);
       ctx.font = 'bold 11px monospace'; ctx.fillStyle = '#ffff44';
       ctx.fillText('— SURVIVAL OPTIONS —', W/2, GAME_H/2+58);
@@ -1285,9 +1575,12 @@ function drawHUD() {
   }
 
   // ── Bottom control bar ──
-  ctx.fillStyle = '#0e0e0e'; ctx.fillRect(0, GAME_H, W, HUD_H);
-  ctx.fillStyle = '#444'; ctx.fillRect(0, GAME_H, W, 1);
-  ctx.fillStyle = '#888'; ctx.font = '9px monospace'; ctx.textAlign = 'left';
+  const botBg = ctx.createLinearGradient(0, GAME_H, 0, H);
+  botBg.addColorStop(0, '#131313'); botBg.addColorStop(1, '#0a0a0a');
+  ctx.fillStyle = botBg; ctx.fillRect(0, GAME_H, W, HUD_H);
+  ctx.strokeStyle = '#2e2e2e'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, GAME_H); ctx.lineTo(W, GAME_H); ctx.stroke();
+  ctx.fillStyle = '#666'; ctx.font = '9px monospace'; ctx.textAlign = 'left';
   ctx.fillText(
     'Move: WASD/Arrows  Jump: SPACE  Attack: X/Z (sword/gun)  Interact: E  Buy: C near shop  Hide: H (night)  Sprint: SHIFT (worst!)',
     8, GAME_H + 16
@@ -1300,18 +1593,31 @@ function drawHUD() {
 
 // ---------- DRAW SCREENS ----------
 function drawTitle() {
-  ctx.fillStyle = '#080808'; ctx.fillRect(0, 0, W, H);
+  // Dark radial background with blood-red centre glow
+  const bg = ctx.createRadialGradient(W/2, H * 0.38, 30, W/2, H/2, 520);
+  bg.addColorStop(0, '#150000'); bg.addColorStop(0.5, '#080000'); bg.addColorStop(1, '#000000');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  // Vignette
+  const vig = ctx.createRadialGradient(W/2, H/2, 180, W/2, H/2, 520);
+  vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(0,0,0,0.65)');
+  ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
 
-  // Dramatic title
-  ctx.shadowColor = '#cc0000'; ctx.shadowBlur = 30;
+  // Dramatic title – double glow
+  ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 65;
   ctx.fillStyle = '#cc0000'; ctx.font = 'bold 78px monospace'; ctx.textAlign = 'center';
   ctx.fillText('ASSASSINS', W/2, 120);
+  ctx.shadowColor = '#ff5555'; ctx.shadowBlur = 22;
+  ctx.fillStyle = '#ee2222'; ctx.fillText('ASSASSINS', W/2, 120);
   ctx.shadowBlur = 0;
 
-  ctx.fillStyle = '#666'; ctx.font = '14px monospace';
+  ctx.fillStyle = '#555'; ctx.font = '14px monospace';
   ctx.fillText('A Hotel Survival Game', W/2, 152);
 
-  ctx.fillStyle = '#440000'; ctx.fillRect(W/2-210, 165, 420, 2);
+  // Gradient separator
+  const sep = ctx.createLinearGradient(W/2-210, 165, W/2+210, 165);
+  sep.addColorStop(0, 'rgba(80,0,0,0)'); sep.addColorStop(0.5, '#880000'); sep.addColorStop(1, 'rgba(80,0,0,0)');
+  ctx.strokeStyle = sep; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(W/2-210, 165); ctx.lineTo(W/2+210, 165); ctx.stroke();
 
   ctx.fillStyle = '#aaa'; ctx.font = '12px monospace';
   ctx.fillText('Trapped in a hotel. Survive every night. Watch the shadows.', W/2, 188);
@@ -1327,7 +1633,9 @@ function drawTitle() {
   ctx.fillStyle = '#ffd700'; ctx.fillText('⚔ Sword Shop   $30   (melee range)', W/2, 314);
   ctx.fillStyle = '#44ff44'; ctx.fillText('🔫 Gun Shop    $50   (shoots across any distance)', W/2, 330);
 
-  ctx.fillStyle = '#444'; ctx.fillRect(W/2-210, 346, 420, 2);
+  const sep2 = ctx.createLinearGradient(W/2-210, 346, W/2+210, 346);
+  sep2.addColorStop(0, 'rgba(80,0,0,0)'); sep2.addColorStop(0.5, '#660000'); sep2.addColorStop(1, 'rgba(80,0,0,0)');
+  ctx.strokeStyle = sep2; ctx.beginPath(); ctx.moveTo(W/2-210, 346); ctx.lineTo(W/2+210, 346); ctx.stroke();
 
   // Account info
   if (currentUser) {
@@ -1338,11 +1646,15 @@ function drawTitle() {
     ctx.fillText('Press ESC to log in / create an account and save your progress', W/2, 364);
   }
 
-  // Start button
+  // Start button with gradient + glow
   const bx = W/2-110, by = 382, bw = 220, bh = 46;
   const mc = mouseClick;
-  ctx.fillStyle = '#aa0000'; ctx.fillRect(bx, by, bw, bh);
+  const btnG = ctx.createLinearGradient(bx, by, bx, by + bh);
+  btnG.addColorStop(0, '#cc1100'); btnG.addColorStop(1, '#880000');
+  ctx.fillStyle = btnG; ctx.fillRect(bx, by, bw, bh);
+  ctx.shadowColor = '#ff4444'; ctx.shadowBlur = 14;
   ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
+  ctx.shadowBlur = 0;
   ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center';
   ctx.fillText('▶  START', W/2, by + 31);
 
@@ -1420,17 +1732,21 @@ function drawLogin() {
 }
 
 function drawLose() {
-  ctx.fillStyle = 'rgba(16,0,0,0.96)'; ctx.fillRect(0, 0, W, H);
-  ctx.shadowColor = '#cc0000'; ctx.shadowBlur = 30;
+  const bg = ctx.createRadialGradient(W/2, H/2, 30, W/2, H/2, 520);
+  bg.addColorStop(0, '#1c0000'); bg.addColorStop(1, '#000000');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  ctx.shadowColor = '#cc0000'; ctx.shadowBlur = 55;
   ctx.fillStyle = '#cc0000'; ctx.font = 'bold 42px monospace'; ctx.textAlign = 'center';
   ctx.fillText('YOU HAVE BEEN', W/2, 210);
   ctx.fillText('KILLED BY THE', W/2, 262);
-  ctx.fillText('ASSASSINS', W/2, 314);
+  ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 30;
+  ctx.fillStyle = '#ff2222'; ctx.fillText('ASSASSINS', W/2, 314);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#666'; ctx.font = '16px monospace';
-  ctx.fillText('The hotel falls silent…', W/2, 365);
-  ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
-  ctx.fillText('Press ENTER to try again', W/2, 420);
+  ctx.fillStyle = '#555'; ctx.font = '16px monospace';
+  ctx.fillText('The hotel falls silent…', W/2, 368);
+  ctx.fillStyle = '#aaa'; ctx.font = '16px monospace';
+  ctx.fillText('Press ENTER to try again', W/2, 422);
 }
 
 // ---------- MAIN LOOP ----------
@@ -1451,6 +1767,8 @@ function render() {
   drawCompanion();
   assassins.forEach(a => a.draw());
   drawBullets();
+  drawParticles();
+  drawMuzzleFlash();
   drawPlayer();
   drawFogOfWar();
   if (phase === 'dawn') drawDawnOverlay();
