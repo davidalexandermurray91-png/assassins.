@@ -528,7 +528,7 @@ const M = {
 function buildLevel() {
   // Floor
   const fg = new THREE.PlaneGeometry(COLS, ROWS); fg.rotateX(-Math.PI/2);
-  scene.add(Object.assign(new THREE.Mesh(fg, M.floor), {position: new THREE.Vector3(COLS/2,0,ROWS/2)}));
+  const fm = new THREE.Mesh(fg, M.floor); fm.position.set(COLS/2, 0, ROWS/2); scene.add(fm);
   const lg = new THREE.PlaneGeometry(22, 4.2); lg.rotateX(-Math.PI/2);
   const lm = new THREE.Mesh(lg, M.lobbyFlr); lm.position.set(12,0.001,14.9); scene.add(lm);
 
