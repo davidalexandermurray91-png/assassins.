@@ -522,6 +522,11 @@ const M = {
   blade:     new THREE.MeshLambertMaterial({ color: 0xcccccc }),
   hilt:      new THREE.MeshLambertMaterial({ color: 0x886600 }),
   gunMetal:  new THREE.MeshLambertMaterial({ color: 0x1e1e1e }),
+  plgBody:   new THREE.MeshLambertMaterial({ color: 0x0a0a0a }),
+  plgLimb:   new THREE.MeshLambertMaterial({ color: 0x0d2a0d }),
+  plgHorn:   new THREE.MeshBasicMaterial  ({ color: 0x33ff55 }),
+  plgCrack:  new THREE.MeshBasicMaterial  ({ color: 0x55ff88 }),
+  plgEye:    new THREE.MeshBasicMaterial  ({ color: 0x88ffaa }),
 };
 
 // ─── BUILD LEVEL ─────────────────────────────────────
@@ -693,6 +698,126 @@ class Assassin {
   }
 }
 
+// ─── PLG (Player-Lastine-Golem) ──────────────────────
+// Black-and-green guardian. Highest HP of any mob; intercepts assassins
+// for the player and the companion, "risking its life" to body-block.
+// Hitting a PLG grants +2 extra lives; the PLG takes no damage.
+// When a PLG "sees green" (a worker or the gun shop within sight) it
+// once spawns 3 more PLGs beside it. The total is capped to bound the
+// chain reaction (workers/gun-shop are permanent green sources).
+const golems = [];
+const GOLEM_MAX = 8;
+class Golem {
+  constructor(x,z) {
+    this.pos   = new THREE.Vector3(x,0,z);
+    this.hp    = 999; this.maxHp = 999; this.alive = true;
+    this.spd   = 2.6;
+    this.atkCD = 0;
+    this.greenSpawned = false;
+    // Mesh — large, ~2x assassin height
+    this.mesh = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 2.20, 0.70), M.plgBody); body.position.y = 1.10;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.55, 0.55), M.plgBody); head.position.y = 2.48;
+    // Horns — two glowing green spikes
+    const hornG = new THREE.ConeGeometry(0.10, 0.45, 6);
+    const hL = new THREE.Mesh(hornG, M.plgHorn); hL.position.set(-0.18, 2.92, 0);
+    const hR = new THREE.Mesh(hornG, M.plgHorn); hR.position.set( 0.18, 2.92, 0);
+    // Eyes
+    const eg = new THREE.BoxGeometry(0.10, 0.07, 0.01);
+    const eL = new THREE.Mesh(eg, M.plgEye); eL.position.set(-0.14, 2.52, 0.28);
+    const eR = new THREE.Mesh(eg, M.plgEye); eR.position.set( 0.14, 2.52, 0.28);
+    // Arms with glowing green cracks
+    const armG = new THREE.BoxGeometry(0.28, 1.30, 0.28);
+    const aL = new THREE.Mesh(armG, M.plgLimb); aL.position.set(-0.66, 1.35, 0);
+    const aR = new THREE.Mesh(armG, M.plgLimb); aR.position.set( 0.66, 1.35, 0);
+    const crackG = new THREE.BoxGeometry(0.04, 1.10, 0.04);
+    const cL1 = new THREE.Mesh(crackG, M.plgCrack); cL1.position.set(-0.66, 1.35, 0.15); cL1.rotation.z = 0.12;
+    const cL2 = new THREE.Mesh(crackG, M.plgCrack); cL2.position.set(-0.78, 1.40, 0.00); cL2.rotation.z =-0.10; cL2.scale.y = 0.6;
+    const cR1 = new THREE.Mesh(crackG, M.plgCrack); cR1.position.set( 0.66, 1.35, 0.15); cR1.rotation.z =-0.12;
+    const cR2 = new THREE.Mesh(crackG, M.plgCrack); cR2.position.set( 0.78, 1.40, 0.00); cR2.rotation.z = 0.10; cR2.scale.y = 0.6;
+    this.mesh.add(body, head, hL, hR, eL, eR, aL, aR, cL1, cL2, cR1, cR2);
+    this.mesh.position.copy(this.pos); scene.add(this.mesh);
+  }
+  moveTo(tx,tz,spd,dt) {
+    const dx=tx-this.pos.x, dz=tz-this.pos.z, d=Math.hypot(dx,dz);
+    if (d<0.08) return;
+    const s=spd*dt, r=0.35;
+    const nx=dx/d*s, nz=dz/d*s;
+    if (!isWall(Math.floor(this.pos.x+nx+r*Math.sign(dx)), Math.floor(this.pos.z))) this.pos.x+=nx;
+    if (!isWall(Math.floor(this.pos.x), Math.floor(this.pos.z+nz+r*Math.sign(dz)))) this.pos.z+=nz;
+    if (d>0.15) this.mesh.rotation.y = Math.atan2(tx-this.pos.x, tz-this.pos.z);
+  }
+  // Pick the assassin most threatening to player or companion
+  pickThreat() {
+    let best=null, bestScore=Infinity;
+    assassins.forEach(a=>{
+      if (!a.alive) return;
+      const dP = Math.hypot(a.pos.x-playerPos.x, a.pos.z-playerPos.z);
+      const dC = Math.hypot(a.pos.x-comp.x,     a.pos.z-comp.z);
+      const score = Math.min(dP, dC);
+      if (score < bestScore) { bestScore = score; best = a; }
+    });
+    return best;
+  }
+  // Trigger the one-shot "sees green" reinforcement
+  checkGreen() {
+    if (this.greenSpawned) return;
+    if (golems.length >= GOLEM_MAX) return;
+    const GR = 8; // sight range for green
+    let sawGreen = false;
+    for (const w of WORKERS) {
+      if (Math.hypot(w.x-this.pos.x, w.z-this.pos.z) < GR) { sawGreen = true; break; }
+    }
+    if (!sawGreen && Math.hypot(GUN_SHOP.x-this.pos.x, GUN_SHOP.z-this.pos.z) < GR) sawGreen = true;
+    if (!sawGreen) return;
+    this.greenSpawned = true;
+    spawnGolemsBeside(this.pos.x, this.pos.z, 3);
+  }
+  update(dt) {
+    if (!this.alive) return;
+    if (this.atkCD>0) this.atkCD-=dt;
+    this.checkGreen();
+    const threat = this.pickThreat();
+    if (threat) {
+      // Body-block: aim for the midpoint between threat and nearest protectee
+      const dTP = Math.hypot(threat.pos.x-playerPos.x, threat.pos.z-playerPos.z);
+      const dTC = Math.hypot(threat.pos.x-comp.x,     threat.pos.z-comp.z);
+      const prot = dTP <= dTC ? playerPos : comp;
+      const tx = (threat.pos.x + prot.x) * 0.5;
+      const tz = (threat.pos.z + prot.z) * 0.5;
+      this.moveTo(tx, tz, this.spd, dt);
+      // Smite the assassin if adjacent
+      const dA = Math.hypot(this.pos.x-threat.pos.x, this.pos.z-threat.pos.z);
+      if (dA < 1.3 && this.atkCD <= 0) {
+        this.atkCD = 0.6;
+        threat.hit(2);
+      }
+    } else {
+      // No threat — hover near the player
+      const d = Math.hypot(this.pos.x-playerPos.x, this.pos.z-playerPos.z);
+      if (d > 2.5) this.moveTo(playerPos.x, playerPos.z, this.spd*0.8, dt);
+    }
+    this.mesh.position.copy(this.pos); this.mesh.position.y = 0;
+  }
+  // Player attacking the PLG: no damage, grant +2 lives instead.
+  hit(_dmg) {
+    playerHP += 2;
+    hitFlashT = 0; // suppress red flash
+    snd.coin();
+  }
+}
+function spawnGolemBeside(x, z) {
+  if (golems.length >= GOLEM_MAX) return;
+  // Try a few offsets to avoid walls
+  for (let i=0; i<8; i++) {
+    const a = Math.random()*Math.PI*2, r = 1.0 + Math.random()*0.8;
+    const nx = x + Math.cos(a)*r, nz = z + Math.sin(a)*r;
+    if (!wallPt(nx, nz)) { golems.push(new Golem(nx, nz)); return; }
+  }
+  golems.push(new Golem(x, z));
+}
+function spawnGolemsBeside(x, z, n) { for (let i=0; i<n; i++) spawnGolemBeside(x, z); }
+
 // ─── AUDIO ───────────────────────────────────────────
 let _ac=null;
 function getAC(){if(!_ac){const C=window.AudioContext||window.webkitAudioContext;if(C)_ac=new C();}if(_ac&&_ac.state==='suspended')_ac.resume();return _ac;}
@@ -766,6 +891,7 @@ function initGame(keepProgress) {
   comp.x=12.8; comp.z=14; comp.state='follow';
   WORKERS.forEach(w=>{w.cooldown=0;w.flash=0;});
   assassins.forEach(a=>scene.remove(a.mesh)); assassins.length=0;
+  golems.forEach(g=>scene.remove(g.mesh)); golems.length=0;
   spawnSchedule=genSchedule(nightsSurvived);
   applyLighting();
   gameState='playing';
@@ -799,6 +925,12 @@ function doSwordAttack() {
     const d=Math.hypot(dx,dz);
     if (d<=SWORD_R && (dx/d)*fx+(dz/d)*fz > -0.2) a.hit(1);
   });
+  golems.forEach(g=>{
+    if (!g.alive) return;
+    const dx=g.pos.x-playerPos.x, dz=g.pos.z-playerPos.z;
+    const d=Math.hypot(dx,dz);
+    if (d<=SWORD_R && (dx/d)*fx+(dz/d)*fz > -0.2) g.hit(1);
+  });
 }
 function doGunShoot() {
   if (!hasGun||attackCD>0) return;
@@ -806,15 +938,19 @@ function doGunShoot() {
   document.getElementById('muzzle-flash').classList.add('active');
   setTimeout(()=>document.getElementById('muzzle-flash').classList.remove('active'),80);
   ray.setFromCamera(new THREE.Vector2(0,0), camera);
-  // Intersect against assassin Groups recursively; find owning Assassin from hit object
-  const tgtGroups = assassins.filter(a=>a.alive).map(a=>a.mesh);
+  // Intersect against assassin + golem Groups recursively; find owning entity from hit object
+  const aGroups = assassins.filter(a=>a.alive).map(a=>a.mesh);
+  const gGroups = golems.filter(g=>g.alive).map(g=>g.mesh);
+  const tgtGroups = aGroups.concat(gGroups);
   if (!tgtGroups.length) return;
   const hits = ray.intersectObjects(tgtGroups, true);
   if (!hits.length) return;
   let hitObj = hits[0].object;
   while (hitObj && !tgtGroups.includes(hitObj)) hitObj = hitObj.parent;
-  const v = assassins.find(a=>a.alive && a.mesh === hitObj);
-  if (v) v.hit(1);
+  const a = assassins.find(x=>x.alive && x.mesh === hitObj);
+  if (a) { a.hit(1); return; }
+  const g = golems.find(x=>x.alive && x.mesh === hitObj);
+  if (g) g.hit(1);
 }
 function doAttack() { if(hasGun) doGunShoot(); else if(hasSword) doSwordAttack(); }
 
@@ -829,6 +965,7 @@ function updatePhase(dt) {
     if (dawnTimer<=0) {
       phase='day'; phaseTime=DAY_DUR;
       assassins.forEach(a=>scene.remove(a.mesh)); assassins.length=0;
+      golems.forEach(g=>scene.remove(g.mesh)); golems.length=0;
       nightElapsed=0; isHiding=false; companionDistract=false; comp.state='follow';
       playerPos.set(12,EYE_H,14); playerHP=5; comp.x=12.8; comp.z=14;
       document.getElementById('dawn-ov').classList.remove('active');
@@ -844,6 +981,8 @@ function updatePhase(dt) {
     nightWarningTimer=5; lastCountdownSec=-1;
     snd.night(); applyLighting();
     spawnSchedule=genSchedule(nightsSurvived);
+    // PLG guardian arrives at nightfall, near the player
+    spawnGolemBeside(playerPos.x, playerPos.z);
   }
 
   if (phase==='night') {
@@ -935,7 +1074,8 @@ function updatePlayer(dt) {
 function updateHUD() {
   // Health
   document.getElementById('hb-hp').textContent=
-    'HP: '+'♥'.repeat(playerHP)+'♡'.repeat(5-playerHP);
+    'HP: '+'♥'.repeat(Math.min(playerHP,5))+'♡'.repeat(Math.max(0,5-playerHP))+
+    (playerHP>5?' +'+(playerHP-5):'');
 
   // Phase
   const tcEl=document.getElementById('hb-tc');
@@ -997,6 +1137,8 @@ function update(dt) {
   updateCompanion(dt);
   assassins.forEach(a=>a.update(dt));
   for (let i=assassins.length-1;i>=0;i--) if(!assassins[i].alive) assassins.splice(i,1);
+  golems.forEach(g=>g.update(dt));
+  for (let i=golems.length-1;i>=0;i--) if(!golems[i].alive) golems.splice(i,1);
   updateHUD();
 }
 
