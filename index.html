@@ -863,17 +863,17 @@ function spawnAssassins(n){for(let i=0;i<n;i++){const sx=3.75+Math.random()*17.5
 // ─── LIGHTING ────────────────────────────────────────
 function applyLighting() {
   if (phase==='day') {
-    ambLight.color.setHex(0x807060); ambLight.intensity=1.6;
-    playerLight.color.setHex(0xffddaa); playerLight.intensity=1.6; playerLight.distance=16;
-    scene.fog.color.setHex(0x4a3a20); scene.fog.density=0.025;
+    ambLight.color.setHex(0xaa9978); ambLight.intensity=2.2;
+    playerLight.color.setHex(0xffddaa); playerLight.intensity=1.0; playerLight.distance=18;
+    scene.fog.color.setHex(0x5a4a30); scene.fog.density=0.010;
   } else if (phase==='night') {
-    ambLight.color.setHex(0x303048); ambLight.intensity=0.65;
-    playerLight.color.setHex(0xffcc99); playerLight.intensity=3.2; playerLight.distance=12;
-    scene.fog.color.setHex(0x10101a); scene.fog.density=0.06;
+    ambLight.color.setHex(0x7080a8); ambLight.intensity=1.9;
+    playerLight.color.setHex(0xffd0aa); playerLight.intensity=1.4; playerLight.distance=18;
+    scene.fog.color.setHex(0x1a2238); scene.fog.density=0.012;
   } else {
-    ambLight.color.setHex(0x60504a); ambLight.intensity=1.2;
-    playerLight.color.setHex(0xffbb77); playerLight.intensity=2.2; playerLight.distance=14;
-    scene.fog.color.setHex(0x2a1a10); scene.fog.density=0.04;
+    ambLight.color.setHex(0xa0907a); ambLight.intensity=2.0;
+    playerLight.color.setHex(0xffc899); playerLight.intensity=1.2; playerLight.distance=18;
+    scene.fog.color.setHex(0x3a2a18); scene.fog.density=0.011;
   }
 }
 
@@ -1036,7 +1036,8 @@ function updatePlayer(dt) {
 
   const spd=sprint?SPEED*1.85:SPEED;
   const sinY=Math.sin(yaw), cosY=Math.cos(yaw);
-  const wx=mx*cosY-mz*sinY, wz=mx*sinY+mz*cosY;
+  const wx =  mx*cosY + mz*sinY;
+  const wz = -mx*sinY + mz*cosY;
   const moved=moveXZ(playerPos.x, playerPos.z, wx*spd*dt, wz*spd*dt);
   playerPos.x=moved.x; playerPos.z=moved.z;
 
@@ -1056,8 +1057,8 @@ function updatePlayer(dt) {
 
   // Buy (C)
   if (pressed('KeyC')&&phase==='day') {
-    if (dist2(SWORD_SHOP,{x:playerPos.x,z:playerPos.z})<SHOP_DIST&&!hasSword&&money>=SWORD_COST) { hasSword=true;money-=SWORD_COST;snd.buy(); }
-    if (dist2(GUN_SHOP,  {x:playerPos.x,z:playerPos.z})<SHOP_DIST&&!hasGun  &&money>=GUN_COST)  { hasGun=true;  money-=GUN_COST;  snd.buy(); }
+    if (dist2(SWORD_SHOP,{x:playerPos.x,z:playerPos.z})<SHOP_DIST+0.5&&!hasSword&&money>=SWORD_COST) { hasSword=true;money-=SWORD_COST;snd.buy(); }
+    if (dist2(GUN_SHOP,  {x:playerPos.x,z:playerPos.z})<SHOP_DIST+0.5&&!hasGun  &&money>=GUN_COST)  { hasGun=true;  money-=GUN_COST;  snd.buy(); }
   }
 
   // Hide (H)
