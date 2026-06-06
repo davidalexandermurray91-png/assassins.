@@ -95,6 +95,41 @@
       background:rgba(0,35,18,0.92); border:1px solid #00ff88;
       padding:10px 22px; font-size:14px; color:#00ff88; text-align:center;
     }
+    #wardrobe-peek {
+      display:none; position:absolute; inset:0; z-index:14; pointer-events:none;
+    }
+    #wardrobe-peek.active { display:block; }
+    #wardrobe-peek .wp-top {
+      position:absolute; top:0; left:0; right:0; height:42.5%;
+      background:rgba(0,0,0,0.92);
+    }
+    #wardrobe-peek .wp-bot {
+      position:absolute; bottom:0; left:0; right:0; height:42.5%;
+      background:rgba(0,0,0,0.92);
+    }
+    #wardrobe-peek .wp-slit {
+      position:absolute; top:42.5%; left:0; right:0; height:15%;
+      background:transparent;
+      box-shadow: inset 0 8px 18px rgba(0,0,0,0.7), inset 0 -8px 18px rgba(0,0,0,0.7);
+    }
+    #bed-dim {
+      display:none; position:absolute; inset:0; z-index:14; pointer-events:none;
+      background:rgba(0,0,0,0.45);
+    }
+    #bed-dim.active { display:block; }
+    #sleep-ov {
+      display:none; position:absolute; inset:0; z-index:15; pointer-events:none;
+      background:rgba(0,0,20,0.85);
+      flex-direction:column; align-items:center; justify-content:center;
+    }
+    #sleep-ov.active { display:flex; }
+    #sleep-ov p { font-size:18px; color:#aaccff; text-align:center; }
+    #floor-msg {
+      display:none; position:absolute; top:38%; left:50%; transform:translateX(-50%);
+      background:rgba(0,0,0,0.85); border:1px solid #888;
+      padding:10px 24px; font-size:16px; color:#ddd; z-index:16; pointer-events:none;
+    }
+    #floor-msg.active { display:block; }
     #run-warn {
       position:absolute; top:58px; left:50%; transform:translateX(-50%);
       background:rgba(180,0,0,0.88); border:1px solid #ff4444;
@@ -220,1059 +255,736 @@
   </style>
 </head>
 <body>
-
 <div id="game-container">
   <canvas id="c"></canvas>
-
-  <!-- Title screen -->
   <div id="title-screen" class="screen active">
     <div class="title-logo">ASSASSINS</div>
     <div class="title-sub">Hotel Survival &mdash; First Person Edition</div>
     <div class="title-info">
       <h3>&#127919; Goal</h3>
       <p>Survive in a hotel. Earn money each day, buy weapons, survive assassins each night.</p>
-      <h3>&#9728; Day (60s) &mdash; E: work near NPCs &nbsp; C: buy near counters</h3>
-      <p>Each job earns $10. Sword $30 (melee). Gun $50 (raycast, infinite range).</p>
-      <h3>&#9790; Night (90s) &mdash; Left-click: attack &nbsp; H: hide near closets</h3>
-      <p>Hiding sends your Companion to distract assassins for 12 s. Sprint (Shift) alerts ALL assassins!</p>
-      <h3>&#128579; Controls</h3>
-      <p>WASD: move &nbsp;&middot;&nbsp; Mouse: look (click to lock) &nbsp;&middot;&nbsp; Left-click: attack<br>
-         E: work &nbsp;&middot;&nbsp; C: buy &nbsp;&middot;&nbsp; H: hide &nbsp;&middot;&nbsp; Shift: sprint &#9888; &nbsp;&middot;&nbsp; Esc: unlock mouse</p>
+      <h3>&#9728; Day (60s) &mdash; E: work &nbsp; C: buy &nbsp; R: sleep in bed</h3>
+      <p>Each job earns $10. Sword $30 (melee). Gun $50 (raycast). Sleep restores 1 HP.</p>
+      <h3>&#9790; Night (90s) &mdash; Left-click: attack &nbsp; H: hide</h3>
+      <p>Hide in wardrobes or under beds for 12s. Sprint (Shift) alerts ALL assassins!</p>
+      <h3>Controls</h3>
+      <p>WASD: move &middot; Mouse: look &middot; H: hide &middot; R: sleep &middot; Shift: sprint &middot; Stairs: auto</p>
     </div>
     <div id="title-user"></div>
     <button class="start-btn" id="start-btn">&#9654;&nbsp; START</button>
-    <div id="title-hint">Click START or press ENTER &nbsp;&middot;&nbsp; ESC = account</div>
+    <div id="title-hint">Click START or press ENTER &middot; ESC = account</div>
   </div>
-
-  <!-- Login screen -->
   <div id="login-screen" class="screen">
-    <h2>ASSASSINS</h2>
-    <h3>Account Login / Register</h3>
-    <div class="lf">
-      <label>USERNAME</label>
-      <input type="text" id="l-user" maxlength="24" autocomplete="username" spellcheck="false">
-    </div>
-    <div class="lf">
-      <label>PASSWORD</label>
-      <input type="password" id="l-pass" maxlength="64" autocomplete="current-password">
-    </div>
+    <h2>ASSASSINS</h2><h3>Account Login / Register</h3>
+    <div class="lf"><label>USERNAME</label><input type="text" id="l-user" maxlength="24" autocomplete="username" spellcheck="false"></div>
+    <div class="lf"><label>PASSWORD</label><input type="password" id="l-pass" maxlength="64" autocomplete="current-password"></div>
     <div id="login-msg"></div>
     <button class="l-btn" id="l-submit">LOGIN / CREATE ACCOUNT</button>
-    <div class="l-hint">New username = create account &nbsp;&middot;&nbsp; ESC = back to title</div>
+    <div class="l-hint">New username = create account &middot; ESC = back</div>
   </div>
-
-  <!-- Lose screen -->
   <div id="lose-screen" class="screen">
     <div class="lose-title">YOU HAVE BEEN<br>KILLED BY THE<br>ASSASSINS</div>
     <div id="lose-nights"></div>
     <button class="start-btn" id="retry-btn">&#8635;&nbsp; TRY AGAIN</button>
   </div>
-
-  <!-- HUD -->
   <div id="hud">
-    <div class="hb" id="hb-hp"></div>
-    <div class="hb" id="hb-tc"></div>
-    <div class="hb" id="hb-tr"></div>
-    <div class="hb" id="hb-weapon"></div>
+    <div class="hb" id="hb-hp"></div><div class="hb" id="hb-tc"></div>
+    <div class="hb" id="hb-tr"></div><div class="hb" id="hb-weapon"></div>
     <div id="hb-user"></div>
     <div id="hb-prompt" style="display:none"></div>
     <div id="hb-hiding" style="display:none"></div>
-    <div id="run-warn"  style="display:none">&#9888; RUNNING &mdash; Assassins alerted!</div>
+    <div id="run-warn" style="display:none">!! RUNNING - Assassins alerted!</div>
   </div>
-
-  <!-- Crosshair -->
+  <div id="wardrobe-peek"><div class="wp-top"></div><div class="wp-slit"></div><div class="wp-bot"></div></div>
+  <div id="bed-dim"></div>
+  <div id="sleep-ov"><p id="sleep-text">Sleeping...</p></div>
+  <div id="floor-msg"></div>
   <div id="xhair"></div>
-
-  <!-- Pointer-lock prompt -->
   <div id="lock-prompt" class="active">Click to capture mouse &amp; play</div>
-
-  <!-- Screen-flash effects -->
   <div id="muzzle-flash"></div>
   <div id="hit-flash"></div>
-
-  <!-- Dawn overlay -->
-  <div id="dawn-ov">
-    <h2>DAWN BREAKS!</h2>
-    <p id="dawn-msg">Night 0 survived!</p>
-  </div>
-
-  <!-- Night-start warning overlay -->
-  <div id="night-warn-ov">
-    <h2>&#9790; NIGHT HAS FALLEN</h2>
-    <p>Assassins are here!<br><small>Fight (click), Hide (H near closet), Sprint (Shift &mdash; risky!)</small></p>
-  </div>
+  <div id="dawn-ov"><h2>DAWN BREAKS!</h2><p id="dawn-msg">Night 0 survived!</p></div>
+  <div id="night-warn-ov"><h2>NIGHT HAS FALLEN</h2><p>Assassins are here!<br><small>Fight, Hide (H), Sprint (Shift - risky!)</small></p></div>
 </div>
-
-<!-- Mobile controls -->
 <div id="mobile-controls">
   <div id="dpad">
-    <button class="ctrl-btn btn-up"    data-key="KeyW">&#9650;</button>
-    <button class="ctrl-btn btn-left"  data-key="KeyA">&#9664;</button>
+    <button class="ctrl-btn btn-up" data-key="KeyW">&#9650;</button>
+    <button class="ctrl-btn btn-left" data-key="KeyA">&#9664;</button>
     <div class="ctrl-btn btn-gap"></div>
     <button class="ctrl-btn btn-right" data-key="KeyD">&#9654;</button>
-    <button class="ctrl-btn btn-down"  data-key="KeyS">&#9660;</button>
+    <button class="ctrl-btn btn-down" data-key="KeyS">&#9660;</button>
   </div>
-  <button id="info-btn" aria-label="Help / Info">&#9432;</button>
+  <button id="info-btn" aria-label="Help">&#9432;</button>
   <div id="actions">
-    <button class="ctrl-btn act-atk"  id="mob-atk">ATK</button>
+    <button class="ctrl-btn act-atk" id="mob-atk">ATK</button>
     <button class="ctrl-btn act-hide" data-key="KeyH">HIDE</button>
-    <button class="ctrl-btn act-use"  data-key="KeyE">USE</button>
-    <button class="ctrl-btn act-buy"  data-key="KeyC">BUY</button>
-    <button class="ctrl-btn act-sprint" data-key="ShiftLeft">SPRINT<br><small style="font-size:0.7em;opacity:0.8">&#9888;</small></button>
+    <button class="ctrl-btn act-use" data-key="KeyE">USE</button>
+    <button class="ctrl-btn act-buy" data-key="KeyC">BUY</button>
+    <button class="ctrl-btn act-sprint" data-key="ShiftLeft">SPRINT</button>
     <button class="ctrl-btn" style="color:#88aaff;border-color:#334488;border-bottom-color:#112244" id="mob-look-btn">LOOK</button>
   </div>
 </div>
-
-<!-- Help overlay -->
 <div id="help-overlay">
   <div id="help-content">
-    <button id="help-close">&#10005; CLOSE</button>
+    <button id="help-close">X CLOSE</button>
     <h2>ASSASSINS</h2>
-    <h3>&#127919; Goal</h3>
-    <p>Survive nights in the hotel. Earn money by day, buy weapons, fight or hide at night.</p>
-    <h3>&#9876; Combat</h3>
-    <p><b>Left-click / ATK</b> &mdash; Sword melee (range ~1.5 m) or Gun raycast (gun has priority).</p>
-    <h3>&#9790; Night Survival</h3>
-    <p><b>H</b> &mdash; Near a dark closet: hide for 12 s. Companion distracts assassins.</p>
-    <p><b>Shift &#9888;</b> &mdash; Sprint alerts ALL nearby assassins. Use as a last resort only.</p>
-    <h3>&#9728; Day Activities</h3>
-    <p><b>E</b> &mdash; Near a green NPC worker: earn $10.</p>
-    <p><b>C</b> &mdash; Near a shop counter: &#9876; Sword $30 &middot; &#128299; Gun $50.</p>
-    <h3>&#128579; Controls</h3>
-    <p>WASD: move &middot; Mouse: look (click game first to lock cursor)</p>
-    <p>Left-click: attack &middot; E: work &middot; C: buy &middot; H: hide &middot; Shift: sprint &middot; ESC: unlock mouse</p>
-    <h3>&#128190; Account</h3>
-    <p>Press ESC on the title screen to log in / create an account and save progress.</p>
+    <h3>Goal</h3><p>Survive nights. Earn money by day, buy weapons, fight or hide at night.</p>
+    <h3>Combat</h3><p>Left-click/ATK: Sword melee or Gun raycast.</p>
+    <h3>Night</h3><p>H near wardrobe or bed: hide 12s. Shift: sprint (alerts assassins!).</p>
+    <h3>Day</h3><p>E: work (+$10). C: buy sword/gun. R near bed: sleep (restore 1 HP).</p>
+    <h3>Floors</h3><p>Walk onto stairs (S) to switch between Floor 1 and Basement.</p>
   </div>
 </div>
-
 <script src="three.min.js"></script>
 <script>
-// =====================================================
-// ASSASSINS — Hotel Survival (First-Person 3D Edition)
-// Three.js r160 via CDN — single HTML file, no build step
-//
-// Layout:
-//   • Three.js WebGL renderer fills the canvas
-//   • HTML overlays handle all 2D UI (HUD, title, login, lose)
-//   • Game logic is ported from the original 2D version
-//   • Coordinate system: 1 Three.js unit = 1 map tile
-//     Player moves in X–Z plane; Y is vertical
-// =====================================================
+// ASSASSINS - Hotel Survival (First-Person 3D)
+// W=wall .=floor D=doorway B=bed C=wardrobe S=staircase
 
-// ─── MAP ────────────────────────────────────────────
-// W=wall  .=floor  D=doorway (walkable)  — 25 cols x 18 rows
-const MAP = [
-  "WWWWWWWWWWWWWWWWWWWWWWWWW",
-  "W.......W.......W.......W",
-  "W.......W.......W.......W",
-  "W.......W.......W.......W",
-  "W.......W.......W.......W",
-  "WWWWDWWWWWWWDWWWWWWWDWWWW",
-  "W.......................W",
-  "W.......................W",
-  "WWWWDWWWWWWWDWWWWWWWDWWWW",
-  "W.......W.......W.......W",
-  "W.......W.......W.......W",
-  "W.......W.......W.......W",
-  "W.......W.......W.......W",
-  "W.......................W",
-  "W.......................W",
-  "W.......................W",
-  "W.......................W",
-  "WWWWWWWWWWWWWWWWWWWWWWWWW",
+const MAP_F1 = [
+  "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+  "W..B..CW..B..CW.......W..B..CW...W",
+  "W......W......W.......W......W...W",
+  "W......W......W.......W......W.S.W",
+  "W......W......W..B..C.W......W...W",
+  "WWWWDWWWWWDWWWWWWWDWWWWWWWDWWWW...W",
+  "W...............................DWW",
+  "W.................................W",
+  "WWWWDWWWWWDWWWWWWWDWWWWWWWDWWWWWWWW",
+  "W..B..CW..B..CW.......W..B..CW...W",
+  "W......W......W.......W......W...W",
+  "W......W......W.......W......W...W",
+  "W......W......W..B..C.W......W...W",
+  "WWWWDWWWWWDWWWWWWWDWWWWWWWDWWWWWWWW",
+  "W.................................W",
+  "W.................................W",
+  "WWWWDWWWWWDWWWWWWWDWWWWWWWDWWWWWWWW",
+  "W..B..CW..B..CW.......W..B..CW...W",
+  "W......W......W.......W......W...W",
+  "W......W......W.......W......W.S.W",
+  "W......W......W..B..C.W......W...W",
+  "WWWWDWWWWWDWWWWWWWDWWWWWWWDWWWW...W",
+  "W...............................DWW",
+  "W.................................W",
+  "W.................................W",
+  "W.................................W",
+  "W.................................W",
+  "W.................................W",
+  "W.................................W",
+  "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
 ];
-const COLS = 25, ROWS = 18;
-
-// ─── CONSTANTS ───────────────────────────────────────
-const WALL_H      = 2.8;   // wall height (Three.js units)
-const EYE_H       = 1.55;  // camera/eye height
-const PLAYER_R    = 0.28;  // collision radius
-const DAY_DUR     = 60;
-const NIGHT_DUR   = 90;
-const DAWN_DUR    = 4;
-const GUN_COST    = 50;
-const SWORD_COST  = 30;
-const DETECT_R    = 7;     // enemy detection range (tiles)
-const SWORD_R     = 1.6;   // melee range (units)
-const ENEMY_ATK_R = 1.1;   // enemy melee range
-const SPEED       = 4.5;   // player speed (units/s)
-const MOUSE_SENS  = 0.0022;
-const HIDE_DIST   = 2.0;
-const WORK_DIST   = 2.5;
-const SHOP_DIST   = 2.0;
-const LOGIN_SHOW  = 1.6;   // seconds to show login result
-
-// ─── GAME OBJECT POSITIONS ───────────────────────────
-// (original pixel pos / 32 = Three.js world unit)
-const SWORD_SHOP   = { x: 2.5,  z: 13.44 };
-const GUN_SHOP     = { x: 5.31, z: 13.44 };
-const HIDING_SPOTS = [
-  { x: 1.5,  z: 1.5  },
-  { x: 10.0, z: 1.5  },
-  { x: 18.5, z: 1.5  },
-  { x: 1.5,  z: 9.69 },
-  { x: 10.0, z: 9.69 },
-  { x: 18.5, z: 9.69 },
+const MAP_B1 = [
+  "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+  "W.......W.......W...............WW",
+  "W.......W.......W...............WW",
+  "W.......W.......W...............SW",
+  "W.......W.......W...............WW",
+  "WWWWDWWWWWWWDWWWWWWWWWWWWWWWWWWWWW",
+  "W.................................W",
+  "W.................................W",
+  "W.................................W",
+  "W.................................W",
+  "WWWWWWDWWWWWWWWWWWWWWWWWDWWWWWWWWW",
+  "W..C....W.................W..C...W",
+  "W.......W.................W......W",
+  "W.......W.................W......W",
+  "W.......W.................W......W",
+  "WWWWDWWWWWWWWWWWWWWWWWWWWWWWWDWWWW",
+  "W.................................W",
+  "W.................................W",
+  "W.................................W",
+  "W...............................SW",
+  "WWWWWWDWWWWWWWWWWWWWWWWWDWWWWWWWWW",
+  "W..B....W.................W..B...W",
+  "W.......W.................W......W",
+  "W.......W.................W......W",
+  "W.......W.................W......W",
+  "W.................................W",
+  "W.................................W",
+  "W.................................W",
+  "W.................................W",
+  "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
 ];
+const COLS = 35, ROWS = 30;
+let currentFloor = 1;
+function activeMap() { return currentFloor === 1 ? MAP_F1 : MAP_B1; }
+
+const WALL_H=2.8, EYE_H=1.55, PLAYER_R=0.28, DAY_DUR=60, NIGHT_DUR=90, DAWN_DUR=4;
+const GUN_COST=50, SWORD_COST=30, DETECT_R=7, SWORD_R=1.6, ENEMY_ATK_R=1.1;
+const SPEED=4.5, MOUSE_SENS=0.0022, HIDE_DIST=2.0, WORK_DIST=2.5, SHOP_DIST=2.0, LOGIN_SHOW=1.6;
+
+const SWORD_SHOP = { x:2.5, z:24.5 };
+const GUN_SHOP   = { x:5.5, z:24.5 };
+
+function scanMap(map, ch) {
+  const out = [];
+  for (let r=0; r<map.length; r++)
+    for (let c=0; c<map[r].length; c++)
+      if (map[r][c]===ch) out.push({x:c+0.5, z:r+0.5});
+  return out;
+}
+
+let HIDING_SPOTS=[], BED_SPOTS=[], ALL_HIDE=[];
+function refreshHideSpots() {
+  const map = activeMap();
+  HIDING_SPOTS = scanMap(map,'C').map(s=>({...s, type:'wardrobe'}));
+  BED_SPOTS    = scanMap(map,'B').map(s=>({...s, type:'bed'}));
+  ALL_HIDE     = HIDING_SPOTS.concat(BED_SPOTS);
+}
+refreshHideSpots();
+
 const WORKERS = [
-  { x: 16.875, z: 14, cooldown: 0, flash: 0 },
-  { x: 18.75,  z: 14, cooldown: 0, flash: 0 },
-  { x: 20.625, z: 14, cooldown: 0, flash: 0 },
+  { x:20, z:25, cooldown:0, flash:0 },
+  { x:22, z:25, cooldown:0, flash:0 },
+  { x:24, z:25, cooldown:0, flash:0 },
 ];
 
-// ─── TILE HELPERS ────────────────────────────────────
 function tileAt(c, r) {
-  if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return 'W';
-  return MAP[r][c];
+  if (c<0||c>=COLS||r<0||r>=ROWS) return 'W';
+  const m = activeMap();
+  if (r>=m.length||c>=m[r].length) return 'W';
+  return m[r][c];
 }
-function isWall(c, r)  { return tileAt(c, r) === 'W'; }
-function wallAt(x, z)  {
-  const r = PLAYER_R;
-  return isWall(Math.floor(x-r), Math.floor(z-r)) ||
-         isWall(Math.floor(x+r), Math.floor(z-r)) ||
-         isWall(Math.floor(x-r), Math.floor(z+r)) ||
-         isWall(Math.floor(x+r), Math.floor(z+r));
+function isWall(c, r) { return tileAt(c,r)==='W'; }
+function wallAt(x, z) {
+  const r=PLAYER_R;
+  return isWall(Math.floor(x-r),Math.floor(z-r))||isWall(Math.floor(x+r),Math.floor(z-r))||
+         isWall(Math.floor(x-r),Math.floor(z+r))||isWall(Math.floor(x+r),Math.floor(z+r));
 }
-function wallPt(x, z)  { return isWall(Math.floor(x), Math.floor(z)); }
-function moveXZ(px, pz, dx, dz) {
-  let rx = px, rz = pz;
-  if (!wallAt(px + dx, pz))      rx = px + dx;
-  if (!wallAt(rx,      pz + dz)) rz = pz + dz;
-  return { x: rx, z: rz };
+function wallPt(x, z) { return isWall(Math.floor(x),Math.floor(z)); }
+function moveXZ(px,pz,dx,dz) {
+  let rx=px,rz=pz;
+  if (!wallAt(px+dx,pz)) rx=px+dx;
+  if (!wallAt(rx,pz+dz)) rz=pz+dz;
+  return {x:rx,z:rz};
 }
-function dist2(a, b) {
-  const dx = a.x - b.x, dz = (a.z !== undefined ? a.z : a.y) - (b.z !== undefined ? b.z : b.y);
-  return Math.sqrt(dx * dx + dz * dz);
+function dist2(a,b) {
+  const dx=a.x-b.x, dz=(a.z!==undefined?a.z:a.y)-(b.z!==undefined?b.z:b.y);
+  return Math.sqrt(dx*dx+dz*dz);
 }
 
-// ─── INPUT ───────────────────────────────────────────
-const keys = {}, kDown = {};
-document.addEventListener('keydown', e => {
-  if (!keys[e.code]) kDown[e.code] = true;
-  keys[e.code] = true;
-  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))
-    e.preventDefault();
-});
-document.addEventListener('keyup', e => { keys[e.code] = false; });
-function pressed(c) { const v = kDown[c]; delete kDown[c]; return !!v; }
-function held(c)    { return !!keys[c]; }
+const keys={}, kDown={};
+document.addEventListener('keydown',e=>{if(!keys[e.code])kDown[e.code]=true;keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();});
+document.addEventListener('keyup',e=>{keys[e.code]=false;});
+function pressed(c){const v=kDown[c];delete kDown[c];return !!v;}
+function held(c){return !!keys[c];}
 
-let isLocked  = false;
-let yaw       = Math.PI;  // face south (into lobby)
-let pitch     = 0;
-let clickFired = false;
+let isLocked=false, yaw=Math.PI, pitch=0, clickFired=false;
+let wardrobePeekActive=false, hideSpotRef=null, savedPitch=0;
 
-const canvas = document.getElementById('c');
-canvas.addEventListener('click', () => {
-  if (gameState !== 'playing') return;
-  if (!isLocked) canvas.requestPointerLock();
-  else           clickFired = true;
-});
-document.addEventListener('pointerlockchange', () => {
-  isLocked = document.pointerLockElement === canvas;
-  refreshLockPrompt();
-});
-document.addEventListener('mousemove', e => {
-  if (!isLocked || gameState !== 'playing') return;
-  yaw   -= e.movementX * MOUSE_SENS;
-  pitch -= e.movementY * MOUSE_SENS;
-  pitch  = Math.max(-1.2, Math.min(1.2, pitch));
+const canvas=document.getElementById('c');
+canvas.addEventListener('click',()=>{if(gameState!=='playing')return;if(!isLocked)canvas.requestPointerLock();else clickFired=true;});
+document.addEventListener('pointerlockchange',()=>{isLocked=document.pointerLockElement===canvas;refreshLockPrompt();});
+document.addEventListener('mousemove',e=>{
+  if(!isLocked||gameState!=='playing')return;
+  yaw-=e.movementX*MOUSE_SENS;
+  if(!wardrobePeekActive){pitch-=e.movementY*MOUSE_SENS;pitch=Math.max(-1.2,Math.min(1.2,pitch));}
 });
 
-// ─── THREE.JS ────────────────────────────────────────
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio * 0.65, 1.0));
-renderer.autoClear = false;
-
-const scene  = new THREE.Scene();
-scene.fog    = new THREE.FogExp2(0x0a0608, 0.05);
-const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 50);
+const renderer=new THREE.WebGLRenderer({canvas,antialias:false});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio*0.65,1.0));
+renderer.autoClear=false;
+const scene=new THREE.Scene();
+scene.fog=new THREE.FogExp2(0x0a0608,0.05);
+const camera=new THREE.PerspectiveCamera(75,1,0.05,50);
 scene.add(camera);
+const vmScene=new THREE.Scene();
+const vmCam=new THREE.PerspectiveCamera(60,1,0.01,5);
+vmScene.add(new THREE.AmbientLight(0xffffff,2.4));
+const ambLight=new THREE.AmbientLight(0x403020,1.2);
+const playerLight=new THREE.PointLight(0xffddaa,2.6,14);
+const fillLight=new THREE.DirectionalLight(0x8899bb,0.55);
+fillLight.position.set(0,5,0);
+scene.add(ambLight,playerLight,fillLight);
 
-// Weapon viewmodel: own scene, renders on top
-const vmScene = new THREE.Scene();
-const vmCam   = new THREE.PerspectiveCamera(60, 1, 0.01, 5);
-vmScene.add(new THREE.AmbientLight(0xffffff, 2.4));
-
-// Lights
-const ambLight    = new THREE.AmbientLight(0x403020, 1.2);
-const playerLight = new THREE.PointLight(0xffddaa, 2.6, 14);
-const fillLight   = new THREE.DirectionalLight(0x8899bb, 0.55);
-fillLight.position.set(0, 5, 0);
-scene.add(ambLight, playerLight, fillLight);
-
-// ─── MATERIALS ───────────────────────────────────────
-const M = {
-  wall:      new THREE.MeshLambertMaterial({ color: 0x3d2b1f }),
-  floor:     new THREE.MeshLambertMaterial({ color: 0x1c1208 }),
-  lobbyFlr:  new THREE.MeshLambertMaterial({ color: 0x241a0e }),
-  ceil:      new THREE.MeshLambertMaterial({ color: 0x080604 }),
-  closet:    new THREE.MeshLambertMaterial({ color: 0x0d0806 }),
-  swordShp:  new THREE.MeshLambertMaterial({ color: 0x7a5500 }),
-  gunShp:    new THREE.MeshLambertMaterial({ color: 0x0a3a0a }),
-  wkrBody:   new THREE.MeshLambertMaterial({ color: 0x1a6a1a }),
-  wkrHead:   new THREE.MeshLambertMaterial({ color: 0x44aa44 }),
-  cmpBody:   new THREE.MeshLambertMaterial({ color: 0x006688 }),
-  cmpHead:   new THREE.MeshLambertMaterial({ color: 0x0099bb }),
-  asnBody:   new THREE.MeshLambertMaterial({ color: 0xaa1100 }),
-  asnHead:   new THREE.MeshLambertMaterial({ color: 0x882200 }),
-  asnEye:    new THREE.MeshBasicMaterial  ({ color: 0xff4444 }),
-  arm:       new THREE.MeshLambertMaterial({ color: 0xc8824a }),
-  blade:     new THREE.MeshLambertMaterial({ color: 0xcccccc }),
-  hilt:      new THREE.MeshLambertMaterial({ color: 0x886600 }),
-  gunMetal:  new THREE.MeshLambertMaterial({ color: 0x1e1e1e }),
-  plgBody:   new THREE.MeshLambertMaterial({ color: 0x0a0a0a }),
-  plgLimb:   new THREE.MeshLambertMaterial({ color: 0x0d2a0d }),
-  plgHorn:   new THREE.MeshBasicMaterial  ({ color: 0x33ff55 }),
-  plgCrack:  new THREE.MeshBasicMaterial  ({ color: 0x55ff88 }),
-  plgEye:    new THREE.MeshBasicMaterial  ({ color: 0x88ffaa }),
+const M={
+  wall:new THREE.MeshLambertMaterial({color:0x3d2b1f}),
+  floor:new THREE.MeshLambertMaterial({color:0x1c1208}),
+  lobbyFlr:new THREE.MeshLambertMaterial({color:0x241a0e}),
+  ceil:new THREE.MeshLambertMaterial({color:0x080604}),
+  closet:new THREE.MeshLambertMaterial({color:0x0d0806}),
+  swordShp:new THREE.MeshLambertMaterial({color:0x7a5500}),
+  gunShp:new THREE.MeshLambertMaterial({color:0x0a3a0a}),
+  wkrBody:new THREE.MeshLambertMaterial({color:0x1a6a1a}),
+  wkrHead:new THREE.MeshLambertMaterial({color:0x44aa44}),
+  cmpBody:new THREE.MeshLambertMaterial({color:0x006688}),
+  cmpHead:new THREE.MeshLambertMaterial({color:0x0099bb}),
+  asnBody:new THREE.MeshLambertMaterial({color:0xaa1100}),
+  asnHead:new THREE.MeshLambertMaterial({color:0x882200}),
+  asnEye:new THREE.MeshBasicMaterial({color:0xff4444}),
+  arm:new THREE.MeshLambertMaterial({color:0xc8824a}),
+  blade:new THREE.MeshLambertMaterial({color:0xcccccc}),
+  hilt:new THREE.MeshLambertMaterial({color:0x886600}),
+  gunMetal:new THREE.MeshLambertMaterial({color:0x1e1e1e}),
+  plgBody:new THREE.MeshLambertMaterial({color:0x0a0a0a}),
+  plgLimb:new THREE.MeshLambertMaterial({color:0x0d2a0d}),
+  plgHorn:new THREE.MeshBasicMaterial({color:0x33ff55}),
+  plgCrack:new THREE.MeshBasicMaterial({color:0x55ff88}),
+  plgEye:new THREE.MeshBasicMaterial({color:0x88ffaa}),
+  bedFrame:new THREE.MeshLambertMaterial({color:0x3a2210}),
+  bedMat:new THREE.MeshLambertMaterial({color:0xddccaa}),
+  wardDoor:new THREE.MeshLambertMaterial({color:0x2a1a08}),
+  wardBack:new THREE.MeshLambertMaterial({color:0x1a0e04}),
+  stairMat:new THREE.MeshLambertMaterial({color:0x555555}),
 };
 
-// ─── BUILD LEVEL ─────────────────────────────────────
+// --- BUILD LEVEL (rebuildable) ---
+let levelMeshes=[];
+function clearLevel(){levelMeshes.forEach(o=>scene.remove(o));levelMeshes.length=0;}
+function addLvl(o){scene.add(o);levelMeshes.push(o);}
+
 function buildLevel() {
+  clearLevel();
+  refreshHideSpots();
   // Floor
-  const fg = new THREE.PlaneGeometry(COLS, ROWS); fg.rotateX(-Math.PI/2);
-  const fm = new THREE.Mesh(fg, M.floor); fm.position.set(COLS/2, 0, ROWS/2); scene.add(fm);
-  const lg = new THREE.PlaneGeometry(22, 4.2); lg.rotateX(-Math.PI/2);
-  const lm = new THREE.Mesh(lg, M.lobbyFlr); lm.position.set(12,0.001,14.9); scene.add(lm);
-
+  const fg=new THREE.PlaneGeometry(COLS,ROWS);fg.rotateX(-Math.PI/2);
+  const fm=new THREE.Mesh(fg,M.floor);fm.position.set(COLS/2,0,ROWS/2);addLvl(fm);
+  if(currentFloor===1){const lg=new THREE.PlaneGeometry(14,6);lg.rotateX(-Math.PI/2);const lm=new THREE.Mesh(lg,M.lobbyFlr);lm.position.set(17,0.001,26);addLvl(lm);}
   // Ceiling
-  const cg = new THREE.PlaneGeometry(COLS, ROWS); cg.rotateX(Math.PI/2);
-  const cm = new THREE.Mesh(cg, M.ceil); cm.position.set(COLS/2, WALL_H, ROWS/2); scene.add(cm);
-
-  // Walls (InstancedMesh)
-  let wc = 0;
-  for (let r=0; r<ROWS; r++) for (let c=0; c<COLS; c++) if (isWall(c,r)) wc++;
-  const wm  = new THREE.InstancedMesh(new THREE.BoxGeometry(1,WALL_H,1), M.wall, wc);
-  const dum = new THREE.Object3D(); let wi = 0;
-  for (let r=0; r<ROWS; r++) for (let c=0; c<COLS; c++) if (isWall(c,r)) {
-    dum.position.set(c+0.5, WALL_H/2, r+0.5); dum.updateMatrix();
-    wm.setMatrixAt(wi++, dum.matrix);
-  }
-  wm.instanceMatrix.needsUpdate = true; scene.add(wm);
-
-  // Closets
-  HIDING_SPOTS.forEach(s => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(0.8, WALL_H*0.88, 0.55), M.closet);
-    m.position.set(s.x, WALL_H*0.88/2, s.z); scene.add(m);
-  });
-
-  // Shops
-  const sg = new THREE.BoxGeometry(1.1, 0.9, 0.55);
-  const sm = new THREE.Mesh(sg, M.swordShp); sm.position.set(SWORD_SHOP.x,0.45,SWORD_SHOP.z); scene.add(sm);
-  const gm = new THREE.Mesh(sg.clone(), M.gunShp); gm.position.set(GUN_SHOP.x,0.45,GUN_SHOP.z); scene.add(gm);
-
-  // Worker NPCs
-  WORKERS.forEach(w => {
-    const g = new THREE.Group();
-    const b = new THREE.Mesh(new THREE.BoxGeometry(0.36,1.05,0.26), M.wkrBody); b.position.y = 0.525;
-    const h = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.28,0.28), M.wkrHead); h.position.y = 1.19;
-    g.add(b,h); g.position.set(w.x,0,w.z); scene.add(g); w.mesh = g;
-  });
-
-  // Room accent lights
-  [[4.5,2.5],[12.5,2.5],[20.5,2.5],[4.5,10.5],[12.5,10.5],[20.5,10.5],[12.5,6.5],[12.5,14.5]]
-    .forEach(([x,z]) => {
-      const l = new THREE.PointLight(0xffddaa,0.9,10);
-      l.position.set(x, WALL_H*0.85, z); scene.add(l);
-    });
-}
-
-// ─── VIEWMODEL ───────────────────────────────────────
-let vmSword, vmGun;
-function buildViewmodel() {
-  vmSword = new THREE.Group();
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.04,0.04,0.72), M.blade); blade.position.z = -0.32;
-  const hilt  = new THREE.Mesh(new THREE.BoxGeometry(0.14,0.04,0.04), M.hilt);  hilt.position.z  = 0.04;
-  const armS  = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.4),  M.arm);   armS.position.set(0,0,0.18);
-  vmSword.add(blade, hilt, armS);
-  vmSword.position.set(0.22,-0.30,-0.48); vmSword.rotation.set(0.18,-0.08,-0.18);
-
-  vmGun = new THREE.Group();
-  const gbdy = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.12,0.28), M.gunMetal);
-  const gbar = new THREE.Mesh(new THREE.BoxGeometry(0.04,0.04,0.22), M.gunMetal); gbar.position.set(0,0.04,-0.2);
-  const ggrp = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.15,0.07), M.gunMetal); ggrp.position.set(0,-0.11,0.06);
-  const armG = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.36), M.arm);      armG.position.set(0,-0.04,0.2);
-  vmGun.add(gbdy,gbar,ggrp,armG);
-  vmGun.position.set(0.22,-0.28,-0.42); vmGun.rotation.set(0.1,-0.06,-0.14);
-
-  vmScene.add(vmSword, vmGun);
-}
-
-// ─── COMPANION ───────────────────────────────────────
-const comp   = { x: 12.8, z: 14, state: 'follow' };
-let compMesh;
-function buildCompanion() {
-  compMesh = new THREE.Group();
-  const b = new THREE.Mesh(new THREE.BoxGeometry(0.36,1.05,0.26), M.cmpBody); b.position.y=0.525;
-  const h = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.28,0.28), M.cmpHead); h.position.y=1.19;
-  compMesh.add(b,h); compMesh.position.set(comp.x,0,comp.z); scene.add(compMesh);
-}
-function updateCompanion(dt) {
-  const CSPD = 2.8;
-  if (comp.state === 'follow') {
-    const d = Math.hypot(playerPos.x-comp.x, playerPos.z-comp.z);
-    if (d > 2.2) {
-      const dx=(playerPos.x-comp.x)/d, dz=(playerPos.z-comp.z)/d, s=CSPD*dt;
-      if (!wallPt(comp.x+dx*s, comp.z)) comp.x+=dx*s;
-      if (!wallPt(comp.x, comp.z+dz*s)) comp.z+=dz*s;
+  const cg=new THREE.PlaneGeometry(COLS,ROWS);cg.rotateX(Math.PI/2);
+  const cm=new THREE.Mesh(cg,M.ceil);cm.position.set(COLS/2,WALL_H,ROWS/2);addLvl(cm);
+  // Walls
+  let wc=0;
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(isWall(c,r))wc++;
+  if(wc>0){
+    const wm=new THREE.InstancedMesh(new THREE.BoxGeometry(1,WALL_H,1),M.wall,wc);
+    const dum=new THREE.Object3D();let wi=0;
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(isWall(c,r)){
+      dum.position.set(c+0.5,WALL_H/2,r+0.5);dum.updateMatrix();wm.setMatrixAt(wi++,dum.matrix);
     }
+    wm.instanceMatrix.needsUpdate=true;addLvl(wm);
+  }
+  // Wardrobes
+  HIDING_SPOTS.forEach(s=>{
+    const g=new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.9,2.2,0.05),M.wardBack).translateZ(0.25).translateY(1.1));
+    const top2=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.05,0.55),M.wardBack);top2.position.set(0,2.2,0);g.add(top2);
+    const sL=new THREE.Mesh(new THREE.BoxGeometry(0.05,2.2,0.55),M.wardBack);sL.position.set(-0.45,1.1,0);g.add(sL);
+    const sR=new THREE.Mesh(new THREE.BoxGeometry(0.05,2.2,0.55),M.wardBack);sR.position.set(0.45,1.1,0);g.add(sR);
+    const dL=new THREE.Mesh(new THREE.BoxGeometry(0.42,2.1,0.04),M.wardDoor);dL.position.set(-0.22,1.1,-0.27);g.add(dL);
+    const dR=new THREE.Mesh(new THREE.BoxGeometry(0.42,2.1,0.04),M.wardDoor);dR.position.set(0.22,1.1,-0.27);g.add(dR);
+    g.position.set(s.x,0,s.z);addLvl(g);
+  });
+  // Beds
+  BED_SPOTS.forEach(b=>{
+    const g=new THREE.Group();
+    const fr=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.35,1.0),M.bedFrame);fr.position.y=0.175;g.add(fr);
+    const mt=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.4,0.9),M.bedMat);mt.position.y=0.45;g.add(mt);
+    const p1=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.9,0.08),M.bedFrame);p1.position.set(-0.85,0.65,-0.42);g.add(p1);
+    const p2=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.9,0.08),M.bedFrame);p2.position.set(0.85,0.65,-0.42);g.add(p2);
+    g.position.set(b.x,0,b.z);addLvl(g);
+  });
+  // Stairs
+  scanMap(activeMap(),'S').forEach(s=>{
+    const s1=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.15,0.9),M.stairMat);s1.position.set(s.x,0.075,s.z);addLvl(s1);
+    const s2=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.15,0.7),M.stairMat);s2.position.set(s.x,0.225,s.z);addLvl(s2);
+  });
+  // Shops (floor 1 only)
+  if(currentFloor===1){
+    const sg=new THREE.BoxGeometry(1.1,0.9,0.55);
+    const sm=new THREE.Mesh(sg,M.swordShp);sm.position.set(SWORD_SHOP.x,0.45,SWORD_SHOP.z);addLvl(sm);
+    const gm=new THREE.Mesh(sg.clone(),M.gunShp);gm.position.set(GUN_SHOP.x,0.45,GUN_SHOP.z);addLvl(gm);
+  }
+  // Workers (floor 1 only)
+  WORKERS.forEach(w=>{
+    if(w.mesh){scene.remove(w.mesh);w.mesh=null;}
+    if(currentFloor===1){
+      const g=new THREE.Group();
+      const b2=new THREE.Mesh(new THREE.BoxGeometry(0.36,1.05,0.26),M.wkrBody);b2.position.y=0.525;
+      const h2=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.28,0.28),M.wkrHead);h2.position.y=1.19;
+      g.add(b2,h2);g.position.set(w.x,0,w.z);addLvl(g);w.mesh=g;
+    }
+  });
+  // Accent lights
+  const lp=currentFloor===1?[[4,2],[12,2],[20,2],[4,10],[12,10],[20,10],[4,18],[12,18],[20,18],[17,25]]:[[8,3],[8,12],[8,22],[26,12],[26,22],[17,7],[17,17]];
+  lp.forEach(p=>{const l=new THREE.PointLight(0xffddaa,0.9,10);l.position.set(p[0],WALL_H*0.85,p[1]);addLvl(l);});
+}
+
+let vmSword,vmGun;
+function buildViewmodel(){
+  vmSword=new THREE.Group();
+  const blade=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.04,0.72),M.blade);blade.position.z=-0.32;
+  const hilt=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.04,0.04),M.hilt);hilt.position.z=0.04;
+  const armS=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.4),M.arm);armS.position.set(0,0,0.18);
+  vmSword.add(blade,hilt,armS);vmSword.position.set(0.22,-0.30,-0.48);vmSword.rotation.set(0.18,-0.08,-0.18);
+  vmGun=new THREE.Group();
+  const gbdy=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.12,0.28),M.gunMetal);
+  const gbar=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.04,0.22),M.gunMetal);gbar.position.set(0,0.04,-0.2);
+  const ggrp=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.15,0.07),M.gunMetal);ggrp.position.set(0,-0.11,0.06);
+  const armG=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.36),M.arm);armG.position.set(0,-0.04,0.2);
+  vmGun.add(gbdy,gbar,ggrp,armG);vmGun.position.set(0.22,-0.28,-0.42);vmGun.rotation.set(0.1,-0.06,-0.14);
+  vmScene.add(vmSword,vmGun);
+}
+
+const comp={x:17,z:25,state:'follow'};
+let compMesh;
+function buildCompanion(){
+  if(compMesh)scene.remove(compMesh);
+  compMesh=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.BoxGeometry(0.36,1.05,0.26),M.cmpBody);b.position.y=0.525;
+  const h=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.28,0.28),M.cmpHead);h.position.y=1.19;
+  compMesh.add(b,h);compMesh.position.set(comp.x,0,comp.z);scene.add(compMesh);
+}
+function updateCompanion(dt){
+  const CSPD=2.8;
+  if(comp.state==='follow'){
+    const d=Math.hypot(playerPos.x-comp.x,playerPos.z-comp.z);
+    if(d>2.2){const dx=(playerPos.x-comp.x)/d,dz=(playerPos.z-comp.z)/d,s=CSPD*dt;if(!wallPt(comp.x+dx*s,comp.z))comp.x+=dx*s;if(!wallPt(comp.x,comp.z+dz*s))comp.z+=dz*s;}
   } else {
-    let near=null, bd=Infinity;
-    assassins.forEach(a => { if(a.alive){const d=Math.hypot(comp.x-a.pos.x,comp.z-a.pos.z); if(d<bd){bd=d;near=a;}} });
-    if (near && bd > 1.2) {
-      const dx=(near.pos.x-comp.x)/bd, dz=(near.pos.z-comp.z)/bd, s=CSPD*dt;
-      if (!wallPt(comp.x+dx*s, comp.z)) comp.x+=dx*s;
-      if (!wallPt(comp.x, comp.z+dz*s)) comp.z+=dz*s;
-    } else if (!isHiding) { comp.state='follow'; companionDistract=false; }
+    let near=null,bd=Infinity;
+    assassins.forEach(a=>{if(a.alive){const d=Math.hypot(comp.x-a.pos.x,comp.z-a.pos.z);if(d<bd){bd=d;near=a;}}});
+    if(near&&bd>1.2){const dx=(near.pos.x-comp.x)/bd,dz=(near.pos.z-comp.z)/bd,s=CSPD*dt;if(!wallPt(comp.x+dx*s,comp.z))comp.x+=dx*s;if(!wallPt(comp.x,comp.z+dz*s))comp.z+=dz*s;}
+    else if(!isHiding){comp.state='follow';companionDistract=false;}
   }
   compMesh.position.set(comp.x,0,comp.z);
 }
 
-// ─── ASSASSIN ────────────────────────────────────────
-const assassins = [];
-class Assassin {
-  constructor(x,z) {
-    this.pos   = new THREE.Vector3(x,0,z);
-    this.hp    = 5; this.maxHp = 5; this.alive = true;
-    this.state = 'patrol';
-    this.stunT = 0; this.atkCD = 0;
-    this.pAngle = Math.random()*Math.PI*2; this.pTimer = 1+Math.random()*2;
-    this.spd   = 2.0 + Math.random()*0.5;
-    this.distracted = false;
-    // Mesh
-    this.mesh = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.42,1.25,0.32), M.asnBody); body.position.y=0.625;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.34,0.34), M.asnHead); head.position.y=1.38;
-    const eg = new THREE.BoxGeometry(0.07,0.055,0.01);
-    const eL = new THREE.Mesh(eg, M.asnEye); eL.position.set(-0.09,1.40,0.17);
-    const eR = new THREE.Mesh(eg, M.asnEye); eR.position.set( 0.09,1.40,0.17);
-    this.mesh.add(body,head,eL,eR); this.mesh.position.copy(this.pos); scene.add(this.mesh);
-  }
-  dtp() { return Math.hypot(playerPos.x-this.pos.x, playerPos.z-this.pos.z); }
-  moveTo(tx,tz,spd,dt) {
-    const dx=tx-this.pos.x, dz=tz-this.pos.z, d=Math.hypot(dx,dz);
-    if (d<0.08) return;
-    const s=spd*dt, r=0.22;
-    const nx=dx/d*s, nz=dz/d*s;
-    // Use Math.sign(dx) / Math.sign(dz) to avoid sign-flip when dx/dz is near zero
-    if (!isWall(Math.floor(this.pos.x+nx+r*Math.sign(dx)), Math.floor(this.pos.z))) this.pos.x+=nx;
-    if (!isWall(Math.floor(this.pos.x), Math.floor(this.pos.z+nz+r*Math.sign(dz)))) this.pos.z+=nz;
-    if (d>0.15) this.mesh.rotation.y=Math.atan2(tx-this.pos.x, tz-this.pos.z);
-  }
-  patrol(dt) {
-    this.state='patrol'; this.pTimer-=dt;
-    if (this.pTimer<=0) { this.pAngle=Math.random()*Math.PI*2; this.pTimer=1.5+Math.random()*2.5; }
-    this.moveTo(this.pos.x+Math.sin(this.pAngle), this.pos.z+Math.cos(this.pAngle), 1.2, dt);
-  }
-  update(dt) {
-    if (!this.alive) return;
-    if (this.atkCD>0) this.atkCD-=dt;
-    if (this.stunT>0) { this.stunT-=dt; this.mesh.position.copy(this.pos); return; }
-    const distPl = this.dtp();
-    const detR   = playerRunning ? DETECT_R*1.8 : DETECT_R;
-    this.distracted=false;
-    let tx=playerPos.x, tz=playerPos.z;
-    if (isHiding && companionDistract) {
-      const dc=Math.hypot(comp.x-this.pos.x, comp.z-this.pos.z);
-      if (dc<9) { this.distracted=true; tx=comp.x; tz=comp.z; }
-    }
-    if (isHiding && !this.distracted) { this.patrol(dt); }
-    else if (distPl<detR || this.state==='chase') {
-      this.state='chase';
-      if (distPl>0.6) this.moveTo(tx,tz, this.spd*(playerRunning?1.5:1), dt);
-      if (!this.distracted && distPl<ENEMY_ATK_R && this.atkCD<=0) {
-        this.atkCD=1.8;
-        if (playerInvincible<=0) {
-          playerHP=Math.max(0,playerHP-1); playerInvincible=1.0;
-          snd.hit(); hitFlashT=0.2;
-        }
-      }
-    } else { this.patrol(dt); }
-    this.mesh.position.copy(this.pos); this.mesh.position.y=0;
-  }
-  hit(dmg) {
-    this.hp-=dmg; this.stunT=0.35;
-    if (this.hp<=0) { this.hp=0; this.alive=false; scene.remove(this.mesh); snd.enemyDie(); }
-  }
+const assassins=[];
+class Assassin{
+  constructor(x,z){this.pos=new THREE.Vector3(x,0,z);this.hp=5;this.maxHp=5;this.alive=true;this.state='patrol';this.stunT=0;this.atkCD=0;this.pAngle=Math.random()*Math.PI*2;this.pTimer=1+Math.random()*2;this.spd=2.0+Math.random()*0.5;this.distracted=false;this.mesh=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(0.42,1.25,0.32),M.asnBody);body.position.y=0.625;const head=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.34,0.34),M.asnHead);head.position.y=1.38;const eg=new THREE.BoxGeometry(0.07,0.055,0.01);const eL=new THREE.Mesh(eg,M.asnEye);eL.position.set(-0.09,1.40,0.17);const eR=new THREE.Mesh(eg,M.asnEye);eR.position.set(0.09,1.40,0.17);this.mesh.add(body,head,eL,eR);this.mesh.position.copy(this.pos);scene.add(this.mesh);}
+  dtp(){return Math.hypot(playerPos.x-this.pos.x,playerPos.z-this.pos.z);}
+  moveTo(tx,tz,spd,dt){const dx=tx-this.pos.x,dz=tz-this.pos.z,d=Math.hypot(dx,dz);if(d<0.08)return;const s=spd*dt,r=0.22,nx=dx/d*s,nz=dz/d*s;if(!isWall(Math.floor(this.pos.x+nx+r*Math.sign(dx)),Math.floor(this.pos.z)))this.pos.x+=nx;if(!isWall(Math.floor(this.pos.x),Math.floor(this.pos.z+nz+r*Math.sign(dz))))this.pos.z+=nz;if(d>0.15)this.mesh.rotation.y=Math.atan2(tx-this.pos.x,tz-this.pos.z);}
+  patrol(dt){this.state='patrol';this.pTimer-=dt;if(this.pTimer<=0){this.pAngle=Math.random()*Math.PI*2;this.pTimer=1.5+Math.random()*2.5;}this.moveTo(this.pos.x+Math.sin(this.pAngle),this.pos.z+Math.cos(this.pAngle),1.2,dt);}
+  update(dt){if(!this.alive)return;if(this.atkCD>0)this.atkCD-=dt;if(this.stunT>0){this.stunT-=dt;this.mesh.position.copy(this.pos);return;}const distPl=this.dtp();const detR=playerRunning?DETECT_R*1.8:DETECT_R;this.distracted=false;let tx=playerPos.x,tz=playerPos.z;if(isHiding&&companionDistract){const dc=Math.hypot(comp.x-this.pos.x,comp.z-this.pos.z);if(dc<9){this.distracted=true;tx=comp.x;tz=comp.z;}}if(isHiding&&!this.distracted){this.patrol(dt);}else if(distPl<detR||this.state==='chase'){this.state='chase';if(distPl>0.6)this.moveTo(tx,tz,this.spd*(playerRunning?1.5:1),dt);if(!this.distracted&&distPl<ENEMY_ATK_R&&this.atkCD<=0){this.atkCD=1.8;if(playerInvincible<=0){playerHP=Math.max(0,playerHP-1);playerInvincible=1.0;snd.hit();hitFlashT=0.2;}}}else{this.patrol(dt);}this.mesh.position.copy(this.pos);this.mesh.position.y=0;}
+  hit(dmg){this.hp-=dmg;this.stunT=0.35;if(this.hp<=0){this.hp=0;this.alive=false;scene.remove(this.mesh);snd.enemyDie();}}
 }
 
-// ─── PLG (Player-Lastine-Golem) ──────────────────────
-// Black-and-green guardian. Highest HP of any mob; intercepts assassins
-// for the player and the companion, "risking its life" to body-block.
-// Hitting a PLG grants +2 extra lives; the PLG takes no damage.
-// When a PLG "sees green" (a worker or the gun shop within sight) it
-// once spawns 3 more PLGs beside it. The total is capped to bound the
-// chain reaction (workers/gun-shop are permanent green sources).
-const golems = [];
-const GOLEM_MAX = 8;
-class Golem {
-  constructor(x,z) {
-    this.pos   = new THREE.Vector3(x,0,z);
-    this.hp    = 999; this.maxHp = 999; this.alive = true;
-    this.spd   = 2.6;
-    this.atkCD = 0;
-    this.greenSpawned = false;
-    // Mesh — large, ~2x assassin height
-    this.mesh = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 2.20, 0.70), M.plgBody); body.position.y = 1.10;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.55, 0.55), M.plgBody); head.position.y = 2.48;
-    // Horns — two glowing green spikes
-    const hornG = new THREE.ConeGeometry(0.10, 0.45, 6);
-    const hL = new THREE.Mesh(hornG, M.plgHorn); hL.position.set(-0.18, 2.92, 0);
-    const hR = new THREE.Mesh(hornG, M.plgHorn); hR.position.set( 0.18, 2.92, 0);
-    // Eyes
-    const eg = new THREE.BoxGeometry(0.10, 0.07, 0.01);
-    const eL = new THREE.Mesh(eg, M.plgEye); eL.position.set(-0.14, 2.52, 0.28);
-    const eR = new THREE.Mesh(eg, M.plgEye); eR.position.set( 0.14, 2.52, 0.28);
-    // Arms with glowing green cracks
-    const armG = new THREE.BoxGeometry(0.28, 1.30, 0.28);
-    const aL = new THREE.Mesh(armG, M.plgLimb); aL.position.set(-0.66, 1.35, 0);
-    const aR = new THREE.Mesh(armG, M.plgLimb); aR.position.set( 0.66, 1.35, 0);
-    const crackG = new THREE.BoxGeometry(0.04, 1.10, 0.04);
-    const cL1 = new THREE.Mesh(crackG, M.plgCrack); cL1.position.set(-0.66, 1.35, 0.15); cL1.rotation.z = 0.12;
-    const cL2 = new THREE.Mesh(crackG, M.plgCrack); cL2.position.set(-0.78, 1.40, 0.00); cL2.rotation.z =-0.10; cL2.scale.y = 0.6;
-    const cR1 = new THREE.Mesh(crackG, M.plgCrack); cR1.position.set( 0.66, 1.35, 0.15); cR1.rotation.z =-0.12;
-    const cR2 = new THREE.Mesh(crackG, M.plgCrack); cR2.position.set( 0.78, 1.40, 0.00); cR2.rotation.z = 0.10; cR2.scale.y = 0.6;
-    this.mesh.add(body, head, hL, hR, eL, eR, aL, aR, cL1, cL2, cR1, cR2);
-    this.mesh.position.copy(this.pos); scene.add(this.mesh);
-  }
-  moveTo(tx,tz,spd,dt) {
-    const dx=tx-this.pos.x, dz=tz-this.pos.z, d=Math.hypot(dx,dz);
-    if (d<0.08) return;
-    const s=spd*dt, r=0.35;
-    const nx=dx/d*s, nz=dz/d*s;
-    if (!isWall(Math.floor(this.pos.x+nx+r*Math.sign(dx)), Math.floor(this.pos.z))) this.pos.x+=nx;
-    if (!isWall(Math.floor(this.pos.x), Math.floor(this.pos.z+nz+r*Math.sign(dz)))) this.pos.z+=nz;
-    if (d>0.15) this.mesh.rotation.y = Math.atan2(tx-this.pos.x, tz-this.pos.z);
-  }
-  // Pick the assassin most threatening to player or companion
-  pickThreat() {
-    let best=null, bestScore=Infinity;
-    assassins.forEach(a=>{
-      if (!a.alive) return;
-      const dP = Math.hypot(a.pos.x-playerPos.x, a.pos.z-playerPos.z);
-      const dC = Math.hypot(a.pos.x-comp.x,     a.pos.z-comp.z);
-      const score = Math.min(dP, dC);
-      if (score < bestScore) { bestScore = score; best = a; }
-    });
-    return best;
-  }
-  // Trigger the one-shot "sees green" reinforcement
-  checkGreen() {
-    if (this.greenSpawned) return;
-    if (golems.length >= GOLEM_MAX) return;
-    const GR = 8; // sight range for green
-    let sawGreen = false;
-    for (const w of WORKERS) {
-      if (Math.hypot(w.x-this.pos.x, w.z-this.pos.z) < GR) { sawGreen = true; break; }
-    }
-    if (!sawGreen && Math.hypot(GUN_SHOP.x-this.pos.x, GUN_SHOP.z-this.pos.z) < GR) sawGreen = true;
-    if (!sawGreen) return;
-    this.greenSpawned = true;
-    spawnGolemsBeside(this.pos.x, this.pos.z, 3);
-  }
-  update(dt) {
-    if (!this.alive) return;
-    if (this.atkCD>0) this.atkCD-=dt;
-    this.checkGreen();
-    const threat = this.pickThreat();
-    if (threat) {
-      // Body-block: aim for the midpoint between threat and nearest protectee
-      const dTP = Math.hypot(threat.pos.x-playerPos.x, threat.pos.z-playerPos.z);
-      const dTC = Math.hypot(threat.pos.x-comp.x,     threat.pos.z-comp.z);
-      const prot = dTP <= dTC ? playerPos : comp;
-      const tx = (threat.pos.x + prot.x) * 0.5;
-      const tz = (threat.pos.z + prot.z) * 0.5;
-      this.moveTo(tx, tz, this.spd, dt);
-      // Smite the assassin if adjacent
-      const dA = Math.hypot(this.pos.x-threat.pos.x, this.pos.z-threat.pos.z);
-      if (dA < 1.3 && this.atkCD <= 0) {
-        this.atkCD = 0.6;
-        threat.hit(2);
-      }
-    } else {
-      // No threat — hover near the player
-      const d = Math.hypot(this.pos.x-playerPos.x, this.pos.z-playerPos.z);
-      if (d > 2.5) this.moveTo(playerPos.x, playerPos.z, this.spd*0.8, dt);
-    }
-    this.mesh.position.copy(this.pos); this.mesh.position.y = 0;
-  }
-  // Player attacking the PLG: no damage, grant +2 lives instead.
-  hit(_dmg) {
-    playerHP += 2;
-    hitFlashT = 0; // suppress red flash
-    snd.coin();
-  }
+const golems=[];const GOLEM_MAX=8;
+class Golem{
+  constructor(x,z){this.pos=new THREE.Vector3(x,0,z);this.hp=999;this.maxHp=999;this.alive=true;this.spd=2.6;this.atkCD=0;this.greenSpawned=false;this.mesh=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(0.95,2.20,0.70),M.plgBody);body.position.y=1.10;const head=new THREE.Mesh(new THREE.BoxGeometry(0.60,0.55,0.55),M.plgBody);head.position.y=2.48;const hornG=new THREE.ConeGeometry(0.10,0.45,6);const hL=new THREE.Mesh(hornG,M.plgHorn);hL.position.set(-0.18,2.92,0);const hR=new THREE.Mesh(hornG,M.plgHorn);hR.position.set(0.18,2.92,0);const eg=new THREE.BoxGeometry(0.10,0.07,0.01);const eL=new THREE.Mesh(eg,M.plgEye);eL.position.set(-0.14,2.52,0.28);const eR=new THREE.Mesh(eg,M.plgEye);eR.position.set(0.14,2.52,0.28);const aG=new THREE.BoxGeometry(0.28,1.30,0.28);const aL=new THREE.Mesh(aG,M.plgLimb);aL.position.set(-0.66,1.35,0);const aR=new THREE.Mesh(aG,M.plgLimb);aR.position.set(0.66,1.35,0);const crG=new THREE.BoxGeometry(0.04,1.10,0.04);const cL1=new THREE.Mesh(crG,M.plgCrack);cL1.position.set(-0.66,1.35,0.15);cL1.rotation.z=0.12;const cL2=new THREE.Mesh(crG,M.plgCrack);cL2.position.set(-0.78,1.40,0);cL2.rotation.z=-0.10;cL2.scale.y=0.6;const cR1=new THREE.Mesh(crG,M.plgCrack);cR1.position.set(0.66,1.35,0.15);cR1.rotation.z=-0.12;const cR2=new THREE.Mesh(crG,M.plgCrack);cR2.position.set(0.78,1.40,0);cR2.rotation.z=0.10;cR2.scale.y=0.6;this.mesh.add(body,head,hL,hR,eL,eR,aL,aR,cL1,cL2,cR1,cR2);this.mesh.position.copy(this.pos);scene.add(this.mesh);}
+  moveTo(tx,tz,spd,dt){const dx=tx-this.pos.x,dz=tz-this.pos.z,d=Math.hypot(dx,dz);if(d<0.08)return;const s=spd*dt,r=0.35,nx=dx/d*s,nz=dz/d*s;if(!isWall(Math.floor(this.pos.x+nx+r*Math.sign(dx)),Math.floor(this.pos.z)))this.pos.x+=nx;if(!isWall(Math.floor(this.pos.x),Math.floor(this.pos.z+nz+r*Math.sign(dz))))this.pos.z+=nz;if(d>0.15)this.mesh.rotation.y=Math.atan2(tx-this.pos.x,tz-this.pos.z);}
+  pickThreat(){let best=null,bs=Infinity;assassins.forEach(a=>{if(!a.alive)return;const s=Math.min(Math.hypot(a.pos.x-playerPos.x,a.pos.z-playerPos.z),Math.hypot(a.pos.x-comp.x,a.pos.z-comp.z));if(s<bs){bs=s;best=a;}});return best;}
+  checkGreen(){if(this.greenSpawned||golems.length>=GOLEM_MAX)return;const GR=8;let saw=false;for(const w of WORKERS){if(Math.hypot(w.x-this.pos.x,w.z-this.pos.z)<GR){saw=true;break;}}if(!saw&&Math.hypot(GUN_SHOP.x-this.pos.x,GUN_SHOP.z-this.pos.z)<GR)saw=true;if(!saw)return;this.greenSpawned=true;spawnGolemsBeside(this.pos.x,this.pos.z,3);}
+  update(dt){if(!this.alive)return;if(this.atkCD>0)this.atkCD-=dt;this.checkGreen();const threat=this.pickThreat();if(threat){const dTP=Math.hypot(threat.pos.x-playerPos.x,threat.pos.z-playerPos.z),dTC=Math.hypot(threat.pos.x-comp.x,threat.pos.z-comp.z);const prot=dTP<=dTC?playerPos:comp;this.moveTo((threat.pos.x+prot.x)*0.5,(threat.pos.z+prot.z)*0.5,this.spd,dt);const dA=Math.hypot(this.pos.x-threat.pos.x,this.pos.z-threat.pos.z);if(dA<1.3&&this.atkCD<=0){this.atkCD=0.6;threat.hit(2);}}else{const d=Math.hypot(this.pos.x-playerPos.x,this.pos.z-playerPos.z);if(d>2.5)this.moveTo(playerPos.x,playerPos.z,this.spd*0.8,dt);}this.mesh.position.copy(this.pos);this.mesh.position.y=0;}
+  hit(_d){playerHP+=2;hitFlashT=0;snd.coin();}
 }
-function spawnGolemBeside(x, z) {
-  if (golems.length >= GOLEM_MAX) return;
-  // Try a few offsets to avoid walls
-  for (let i=0; i<8; i++) {
-    const a = Math.random()*Math.PI*2, r = 1.0 + Math.random()*0.8;
-    const nx = x + Math.cos(a)*r, nz = z + Math.sin(a)*r;
-    if (!wallPt(nx, nz)) { golems.push(new Golem(nx, nz)); return; }
-  }
-  golems.push(new Golem(x, z));
-}
-function spawnGolemsBeside(x, z, n) { for (let i=0; i<n; i++) spawnGolemBeside(x, z); }
+function spawnGolemBeside(x,z){if(golems.length>=GOLEM_MAX)return;for(let i=0;i<8;i++){const a=Math.random()*Math.PI*2,r=1+Math.random()*0.8,nx=x+Math.cos(a)*r,nz=z+Math.sin(a)*r;if(!wallPt(nx,nz)){golems.push(new Golem(nx,nz));return;}}golems.push(new Golem(x,z));}
+function spawnGolemsBeside(x,z,n){for(let i=0;i<n;i++)spawnGolemBeside(x,z);}
 
-// ─── AUDIO ───────────────────────────────────────────
 let _ac=null;
 function getAC(){if(!_ac){const C=window.AudioContext||window.webkitAudioContext;if(C)_ac=new C();}if(_ac&&_ac.state==='suspended')_ac.resume();return _ac;}
-function _beep(freq,dur,type,vol,t0){const a=getAC();if(!a)return;const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.type=type;o.frequency.setValueAtTime(freq,a.currentTime+t0);g.gain.setValueAtTime(vol,a.currentTime+t0);g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+t0+dur);o.start(a.currentTime+t0);o.stop(a.currentTime+t0+dur+0.02);}
+function _beep(f,d,t,v,t0){const a=getAC();if(!a)return;const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.type=t;o.frequency.setValueAtTime(f,a.currentTime+t0);g.gain.setValueAtTime(v,a.currentTime+t0);g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+t0+d);o.start(a.currentTime+t0);o.stop(a.currentTime+t0+d+0.02);}
 const snd={
-  sword:    ()=>{_beep(280,.08,'sawtooth',.3,0);_beep(140,.15,'sawtooth',.2,.06);},
-  gun:      ()=>{_beep(100,.04,'square',.5,0);_beep(50,.12,'square',.3,.03);},
-  hit:      ()=>{_beep(180,.1,'sawtooth',.4,0);_beep(90,.18,'sawtooth',.3,.08);},
-  enemyDie: ()=>{_beep(350,.05,'square',.2,0);_beep(175,.08,'square',.15,.05);_beep(80,.14,'square',.1,.1);},
-  coin:     ()=>{_beep(880,.07,'sine',.2,0);_beep(1320,.09,'sine',.2,.07);},
-  buy:      ()=>{_beep(440,.07,'sine',.2,0);_beep(660,.07,'sine',.2,.1);_beep(880,.12,'sine',.25,.2);},
-  hide:     ()=>{_beep(600,.06,'sine',.15,0);_beep(400,.1,'sine',.1,.06);},
-  night:    ()=>{_beep(220,.5,'sine',.3,0);_beep(165,.7,'sine',.25,.4);_beep(110,1.2,'sine',.2,.9);},
-  dawn:     ()=>{_beep(440,.12,'sine',.2,0);_beep(550,.12,'sine',.2,.15);_beep(660,.15,'sine',.25,.3);_beep(880,.3,'sine',.3,.5);},
-  death:    ()=>{_beep(440,.1,'sawtooth',.3,0);_beep(330,.15,'sawtooth',.3,.1);_beep(220,.2,'sawtooth',.3,.25);_beep(110,.5,'sawtooth',.35,.45);},
-  tick:     ()=>{_beep(880,.04,'sine',.15,0);},
-  tickFast: ()=>{_beep(1200,.05,'sine',.25,0);_beep(900,.07,'sine',.2,.05);},
+  sword:()=>{_beep(280,.08,'sawtooth',.3,0);_beep(140,.15,'sawtooth',.2,.06);},
+  gun:()=>{_beep(100,.04,'square',.5,0);_beep(50,.12,'square',.3,.03);},
+  hit:()=>{_beep(180,.1,'sawtooth',.4,0);_beep(90,.18,'sawtooth',.3,.08);},
+  enemyDie:()=>{_beep(350,.05,'square',.2,0);_beep(175,.08,'square',.15,.05);_beep(80,.14,'square',.1,.1);},
+  coin:()=>{_beep(880,.07,'sine',.2,0);_beep(1320,.09,'sine',.2,.07);},
+  buy:()=>{_beep(440,.07,'sine',.2,0);_beep(660,.07,'sine',.2,.1);_beep(880,.12,'sine',.25,.2);},
+  hide:()=>{_beep(600,.06,'sine',.15,0);_beep(400,.1,'sine',.1,.06);},
+  night:()=>{_beep(220,.5,'sine',.3,0);_beep(165,.7,'sine',.25,.4);_beep(110,1.2,'sine',.2,.9);},
+  dawn:()=>{_beep(440,.12,'sine',.2,0);_beep(550,.12,'sine',.2,.15);_beep(660,.15,'sine',.25,.3);_beep(880,.3,'sine',.3,.5);},
+  death:()=>{_beep(440,.1,'sawtooth',.3,0);_beep(330,.15,'sawtooth',.3,.1);_beep(220,.2,'sawtooth',.3,.25);_beep(110,.5,'sawtooth',.35,.45);},
+  tick:()=>{_beep(880,.04,'sine',.15,0);},
+  tickFast:()=>{_beep(1200,.05,'sine',.25,0);_beep(900,.07,'sine',.2,.05);}
 };
 ['click','touchstart','keydown'].forEach(t=>document.addEventListener(t,()=>getAC(),{once:true,capture:true}));
 
-// ─── ACCOUNTS ────────────────────────────────────────
-const savedAccounts = JSON.parse(localStorage.getItem('asnAccounts')||'{}');
-let currentUser=null, loginMsgTimer=0, loginPending=false;
+const savedAccounts=JSON.parse(localStorage.getItem('asnAccounts')||'{}');
+let currentUser=null,loginMsgTimer=0,loginPending=false;
 function hashPassword(pw){const d=new TextEncoder().encode(pw);return crypto.subtle.digest('SHA-256',d).then(b=>Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''));}
 function saveProgress(){if(!currentUser||!savedAccounts[currentUser])return;savedAccounts[currentUser].save={money,hasSword,hasGun,nightsSurvived};localStorage.setItem('asnAccounts',JSON.stringify(savedAccounts));}
 function loadProgress(){if(!currentUser||!savedAccounts[currentUser]?.save)return;const s=savedAccounts[currentUser].save;money=s.money||0;hasSword=!!s.hasSword;hasGun=!!s.hasGun;nightsSurvived=s.nightsSurvived||0;}
 
-// ─── GAME STATE ──────────────────────────────────────
-let gameState='title';
-let phase='day', phaseTime=DAY_DUR;
-let money=0, hasSword=false, hasGun=false, nightsSurvived=0;
-let dawnTimer=0, nightWarningTimer=0, runWarningTimer=0;
-let isHiding=false, hideTimeLeft=0, companionDistract=false;
-let spawnSchedule=[], lastCountdownSec=-1, nightElapsed=0, lastFrameTime=0;
-const playerPos = new THREE.Vector3(12, EYE_H, 14);
-let playerHP=5, playerInvincible=0, playerRunning=false;
-let attackCD=0, swingT=0, hitFlashT=0;
+let gameState='title',phase='day',phaseTime=DAY_DUR;
+let money=0,hasSword=false,hasGun=false,nightsSurvived=0;
+let dawnTimer=0,nightWarningTimer=0,runWarningTimer=0;
+let isHiding=false,hideTimeLeft=0,companionDistract=false;
+let sleepTimer=0,isSleeping=false;
+let floorMsgTimer=0,floorTransitCD=0;
+let spawnSchedule=[],lastCountdownSec=-1,nightElapsed=0,lastFrameTime=0;
+const playerPos=new THREE.Vector3(17,EYE_H,25);
+let playerHP=5,playerInvincible=0,playerRunning=false;
+let attackCD=0,swingT=0,hitFlashT=0;
 
-// ─── SPAWN SCHEDULE ──────────────────────────────────
-function genSchedule(n){return[{at:0,count:2+Math.floor(n/2)},{at:20,count:1+Math.floor(n/3)},{at:40,count:2},{at:60,count:1+Math.floor(n/2)}];}
-function spawnAssassins(n){for(let i=0;i<n;i++){const sx=3.75+Math.random()*17.5,sz=15.5+Math.random()*1.2;assassins.push(new Assassin(sx,sz));}}
-
-// ─── LIGHTING ────────────────────────────────────────
-function applyLighting() {
-  if (phase==='day') {
-    ambLight.color.setHex(0xaa9978); ambLight.intensity=2.2;
-    playerLight.color.setHex(0xffddaa); playerLight.intensity=1.0; playerLight.distance=18;
-    scene.fog.color.setHex(0x5a4a30); scene.fog.density=0.010;
-  } else if (phase==='night') {
-    ambLight.color.setHex(0x7080a8); ambLight.intensity=1.9;
-    playerLight.color.setHex(0xffd0aa); playerLight.intensity=1.4; playerLight.distance=18;
-    scene.fog.color.setHex(0x1a2238); scene.fog.density=0.012;
-  } else {
-    ambLight.color.setHex(0xa0907a); ambLight.intensity=2.0;
-    playerLight.color.setHex(0xffc899); playerLight.intensity=1.2; playerLight.distance=18;
-    scene.fog.color.setHex(0x3a2a18); scene.fog.density=0.011;
-  }
+function switchFloor(){
+  const nf=currentFloor===1?0:1;
+  const msg=nf===0?'Going downstairs...':'Going upstairs...';
+  currentFloor=nf;
+  assassins.forEach(a=>scene.remove(a.mesh));assassins.length=0;
+  golems.forEach(g=>scene.remove(g.mesh));golems.length=0;
+  buildLevel();buildCompanion();
+  document.getElementById('floor-msg').textContent=msg;
+  document.getElementById('floor-msg').classList.add('active');
+  floorMsgTimer=1.5;floorTransitCD=1.0;
+  applyLighting();
 }
 
-// ─── INIT ────────────────────────────────────────────
-function initGame(keepProgress) {
-  phase='day'; phaseTime=DAY_DUR;
-  if (!keepProgress) { money=0; hasSword=false; hasGun=false; nightsSurvived=0; }
-  nightWarningTimer=0; runWarningTimer=0;
-  isHiding=false; hideTimeLeft=0; companionDistract=false;
-  nightElapsed=0; dawnTimer=0; lastCountdownSec=-1;
-  playerPos.set(12,EYE_H,14);
-  playerHP=5; playerInvincible=0; playerRunning=false;
-  attackCD=0; swingT=0; hitFlashT=0;
-  yaw=Math.PI; pitch=0;
-  comp.x=12.8; comp.z=14; comp.state='follow';
+function genSchedule(n){return[{at:0,count:2+Math.floor(n/2)},{at:20,count:1+Math.floor(n/3)},{at:40,count:2},{at:60,count:1+Math.floor(n/2)}];}
+function spawnAssassins(n){for(let i=0;i<n;i++){let sx,sz,att=0;do{sx=2+Math.random()*(COLS-4);sz=ROWS-3+Math.random()*1.5;att++;}while(wallPt(sx,sz)&&att<20);assassins.push(new Assassin(sx,sz));}}
+
+function applyLighting(){
+  if(currentFloor===0){ambLight.color.setHex(0x303030);ambLight.intensity=1.0;playerLight.color.setHex(0xffddaa);playerLight.intensity=2.0;playerLight.distance=12;scene.fog.color.setHex(0x0a0a0a);scene.fog.density=0.04;return;}
+  if(phase==='day'){ambLight.color.setHex(0xaa9978);ambLight.intensity=2.2;playerLight.color.setHex(0xffddaa);playerLight.intensity=1.0;playerLight.distance=18;scene.fog.color.setHex(0x5a4a30);scene.fog.density=0.010;}
+  else if(phase==='night'){ambLight.color.setHex(0x7080a8);ambLight.intensity=1.9;playerLight.color.setHex(0xffd0aa);playerLight.intensity=1.4;playerLight.distance=18;scene.fog.color.setHex(0x1a2238);scene.fog.density=0.012;}
+  else{ambLight.color.setHex(0xa0907a);ambLight.intensity=2.0;playerLight.color.setHex(0xffc899);playerLight.intensity=1.2;playerLight.distance=18;scene.fog.color.setHex(0x3a2a18);scene.fog.density=0.011;}
+}
+
+function enterHiding(spot){
+  isHiding=true;hideTimeLeft=12;hideSpotRef=spot;comp.state='distract';companionDistract=true;snd.hide();
+  if(spot.type==='wardrobe'){wardrobePeekActive=true;savedPitch=pitch;pitch=0;document.getElementById('wardrobe-peek').classList.add('active');document.getElementById('bed-dim').classList.remove('active');}
+  else{wardrobePeekActive=false;document.getElementById('bed-dim').classList.add('active');document.getElementById('wardrobe-peek').classList.remove('active');}
+}
+function exitHiding(){
+  isHiding=false;companionDistract=false;comp.state='follow';
+  if(wardrobePeekActive){wardrobePeekActive=false;pitch=savedPitch;}
+  hideSpotRef=null;
+  document.getElementById('wardrobe-peek').classList.remove('active');
+  document.getElementById('bed-dim').classList.remove('active');
+}
+
+function initGame(keepProgress){
+  phase='day';phaseTime=DAY_DUR;currentFloor=1;
+  if(!keepProgress){money=0;hasSword=false;hasGun=false;nightsSurvived=0;}
+  nightWarningTimer=0;runWarningTimer=0;
+  isHiding=false;hideTimeLeft=0;companionDistract=false;
+  hideSpotRef=null;wardrobePeekActive=false;
+  sleepTimer=0;isSleeping=false;floorMsgTimer=0;floorTransitCD=0;
+  nightElapsed=0;dawnTimer=0;lastCountdownSec=-1;
+  playerPos.set(17,EYE_H,25);playerHP=5;playerInvincible=0;playerRunning=false;
+  attackCD=0;swingT=0;hitFlashT=0;yaw=Math.PI;pitch=0;
+  comp.x=17;comp.z=26;comp.state='follow';
   WORKERS.forEach(w=>{w.cooldown=0;w.flash=0;});
-  assassins.forEach(a=>scene.remove(a.mesh)); assassins.length=0;
-  golems.forEach(g=>scene.remove(g.mesh)); golems.length=0;
+  assassins.forEach(a=>scene.remove(a.mesh));assassins.length=0;
+  golems.forEach(g=>scene.remove(g.mesh));golems.length=0;
   spawnSchedule=genSchedule(nightsSurvived);
-  applyLighting();
-  gameState='playing';
-  showScreen(null);
+  buildLevel();buildCompanion();applyLighting();
+  gameState='playing';showScreen(null);
   document.getElementById('hud').classList.add('active');
   document.getElementById('xhair').classList.add('active');
+  document.getElementById('wardrobe-peek').classList.remove('active');
+  document.getElementById('bed-dim').classList.remove('active');
+  document.getElementById('sleep-ov').classList.remove('active');
+  document.getElementById('floor-msg').classList.remove('active');
   refreshLockPrompt();
 }
 
-// ─── UI HELPERS ──────────────────────────────────────
-function showScreen(name) {
+function showScreen(name){
   document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
   document.getElementById('hud').classList.remove('active');
   document.getElementById('xhair').classList.remove('active');
-  if (name) document.getElementById(name+'-screen').classList.add('active');
+  if(name)document.getElementById(name+'-screen').classList.add('active');
   refreshLockPrompt();
 }
-function refreshLockPrompt() {
-  document.getElementById('lock-prompt').classList.toggle('active', gameState==='playing' && !isLocked);
-}
+function refreshLockPrompt(){document.getElementById('lock-prompt').classList.toggle('active',gameState==='playing'&&!isLocked);}
 
-// ─── COMBAT ──────────────────────────────────────────
-const ray = new THREE.Raycaster();
-function doSwordAttack() {
-  if (!hasSword||attackCD>0) return;
-  snd.sword(); attackCD=0.5; swingT=0.28;
-  const fx=-Math.sin(yaw), fz=-Math.cos(yaw);
-  assassins.forEach(a=>{
-    if (!a.alive) return;
-    const dx=a.pos.x-playerPos.x, dz=a.pos.z-playerPos.z;
-    const d=Math.hypot(dx,dz);
-    if (d<=SWORD_R && (dx/d)*fx+(dz/d)*fz > -0.2) a.hit(1);
-  });
-  golems.forEach(g=>{
-    if (!g.alive) return;
-    const dx=g.pos.x-playerPos.x, dz=g.pos.z-playerPos.z;
-    const d=Math.hypot(dx,dz);
-    if (d<=SWORD_R && (dx/d)*fx+(dz/d)*fz > -0.2) g.hit(1);
-  });
+const ray=new THREE.Raycaster();
+function doSwordAttack(){
+  if(!hasSword||attackCD>0)return;snd.sword();attackCD=0.5;swingT=0.28;
+  const fx=-Math.sin(yaw),fz=-Math.cos(yaw);
+  assassins.forEach(a=>{if(!a.alive)return;const dx=a.pos.x-playerPos.x,dz=a.pos.z-playerPos.z,d=Math.hypot(dx,dz);if(d<=SWORD_R&&(dx/d)*fx+(dz/d)*fz>-0.2)a.hit(1);});
+  golems.forEach(g=>{if(!g.alive)return;const dx=g.pos.x-playerPos.x,dz=g.pos.z-playerPos.z,d=Math.hypot(dx,dz);if(d<=SWORD_R&&(dx/d)*fx+(dz/d)*fz>-0.2)g.hit(1);});
 }
-function doGunShoot() {
-  if (!hasGun||attackCD>0) return;
-  snd.gun(); attackCD=0.55;
+function doGunShoot(){
+  if(!hasGun||attackCD>0)return;snd.gun();attackCD=0.55;
   document.getElementById('muzzle-flash').classList.add('active');
   setTimeout(()=>document.getElementById('muzzle-flash').classList.remove('active'),80);
-  ray.setFromCamera(new THREE.Vector2(0,0), camera);
-  // Intersect against assassin + golem Groups recursively; find owning entity from hit object
-  const aGroups = assassins.filter(a=>a.alive).map(a=>a.mesh);
-  const gGroups = golems.filter(g=>g.alive).map(g=>g.mesh);
-  const tgtGroups = aGroups.concat(gGroups);
-  if (!tgtGroups.length) return;
-  const hits = ray.intersectObjects(tgtGroups, true);
-  if (!hits.length) return;
-  let hitObj = hits[0].object;
-  while (hitObj && !tgtGroups.includes(hitObj)) hitObj = hitObj.parent;
-  const a = assassins.find(x=>x.alive && x.mesh === hitObj);
-  if (a) { a.hit(1); return; }
-  const g = golems.find(x=>x.alive && x.mesh === hitObj);
-  if (g) g.hit(1);
+  ray.setFromCamera(new THREE.Vector2(0,0),camera);
+  const aG=assassins.filter(a=>a.alive).map(a=>a.mesh),gG=golems.filter(g=>g.alive).map(g=>g.mesh),tgt=aG.concat(gG);
+  if(!tgt.length)return;const hits=ray.intersectObjects(tgt,true);if(!hits.length)return;
+  let ho=hits[0].object;while(ho&&!tgt.includes(ho))ho=ho.parent;
+  const a=assassins.find(x=>x.alive&&x.mesh===ho);if(a){a.hit(1);return;}
+  const g=golems.find(x=>x.alive&&x.mesh===ho);if(g)g.hit(1);
 }
-function doAttack() { if(hasGun) doGunShoot(); else if(hasSword) doSwordAttack(); }
+function doAttack(){if(hasGun)doGunShoot();else if(hasSword)doSwordAttack();}
 
-// ─── PHASE UPDATE ────────────────────────────────────
-function updatePhase(dt) {
-  if (nightWarningTimer>0) nightWarningTimer-=dt;
-  if (runWarningTimer>0)   runWarningTimer-=dt;
-  document.getElementById('night-warn-ov').classList.toggle('active', nightWarningTimer>0);
-
-  if (phase==='dawn') {
+function updatePhase(dt){
+  if(nightWarningTimer>0)nightWarningTimer-=dt;
+  if(runWarningTimer>0)runWarningTimer-=dt;
+  if(floorMsgTimer>0){floorMsgTimer-=dt;if(floorMsgTimer<=0)document.getElementById('floor-msg').classList.remove('active');}
+  if(floorTransitCD>0)floorTransitCD-=dt;
+  document.getElementById('night-warn-ov').classList.toggle('active',nightWarningTimer>0);
+  if(phase==='dawn'){
     dawnTimer-=dt;
-    if (dawnTimer<=0) {
-      phase='day'; phaseTime=DAY_DUR;
-      assassins.forEach(a=>scene.remove(a.mesh)); assassins.length=0;
-      golems.forEach(g=>scene.remove(g.mesh)); golems.length=0;
-      nightElapsed=0; isHiding=false; companionDistract=false; comp.state='follow';
-      playerPos.set(12,EYE_H,14); playerHP=5; comp.x=12.8; comp.z=14;
+    if(dawnTimer<=0){
+      phase='day';phaseTime=DAY_DUR;
+      assassins.forEach(a=>scene.remove(a.mesh));assassins.length=0;
+      golems.forEach(g=>scene.remove(g.mesh));golems.length=0;
+      nightElapsed=0;isHiding=false;companionDistract=false;comp.state='follow';
+      hideSpotRef=null;wardrobePeekActive=false;
+      document.getElementById('wardrobe-peek').classList.remove('active');
+      document.getElementById('bed-dim').classList.remove('active');
+      playerPos.set(17,EYE_H,25);playerHP=5;comp.x=17;comp.z=26;
+      if(currentFloor!==1){currentFloor=1;buildLevel();buildCompanion();}
       document.getElementById('dawn-ov').classList.remove('active');
       applyLighting();
     }
     return;
   }
-
   phaseTime-=dt;
-
-  if (phase==='day' && phaseTime<=0) {
-    phase='night'; phaseTime=NIGHT_DUR; nightElapsed=0;
-    nightWarningTimer=5; lastCountdownSec=-1;
-    snd.night(); applyLighting();
-    spawnSchedule=genSchedule(nightsSurvived);
-    // PLG guardian arrives at nightfall, near the player
-    spawnGolemBeside(playerPos.x, playerPos.z);
+  if(phase==='day'&&phaseTime<=0){
+    phase='night';phaseTime=NIGHT_DUR;nightElapsed=0;nightWarningTimer=5;lastCountdownSec=-1;
+    snd.night();applyLighting();spawnSchedule=genSchedule(nightsSurvived);
+    spawnGolemBeside(playerPos.x,playerPos.z);
   }
-
-  if (phase==='night') {
-    nightElapsed+=dt;
-    const sec=Math.ceil(phaseTime);
-    if (sec<=10&&sec>=1&&sec!==lastCountdownSec) { lastCountdownSec=sec; if(sec<=3)snd.tickFast();else snd.tick(); }
-    spawnSchedule=spawnSchedule.filter(e=>{ if(nightElapsed>=e.at){spawnAssassins(e.count);return false;}return true; });
-    if (phaseTime<=0) {
-      nightsSurvived++;
-      if (currentUser) saveProgress();
-      phase='dawn'; dawnTimer=DAWN_DUR; lastCountdownSec=-1;
-      snd.dawn();
+  if(phase==='night'){
+    nightElapsed+=dt;const sec=Math.ceil(phaseTime);
+    if(sec<=10&&sec>=1&&sec!==lastCountdownSec){lastCountdownSec=sec;if(sec<=3)snd.tickFast();else snd.tick();}
+    spawnSchedule=spawnSchedule.filter(e=>{if(nightElapsed>=e.at){spawnAssassins(e.count);return false;}return true;});
+    if(phaseTime<=0){
+      nightsSurvived++;if(currentUser)saveProgress();
+      phase='dawn';dawnTimer=DAWN_DUR;lastCountdownSec=-1;snd.dawn();
       document.getElementById('dawn-msg').textContent='Night '+nightsSurvived+' survived!';
-      document.getElementById('dawn-ov').classList.add('active');
-      applyLighting();
+      document.getElementById('dawn-ov').classList.add('active');applyLighting();
     }
   }
 }
 
-// ─── PLAYER UPDATE ───────────────────────────────────
-function updatePlayer(dt) {
-  if (playerInvincible>0) playerInvincible-=dt;
-  if (attackCD>0) attackCD-=dt;
-  if (swingT>0)   swingT-=dt;
-
-  if (playerHP<=0) {
-    playerHP=0; gameState='lose'; snd.death();
+function updatePlayer(dt){
+  if(playerInvincible>0)playerInvincible-=dt;
+  if(attackCD>0)attackCD-=dt;
+  if(swingT>0)swingT-=dt;
+  if(playerHP<=0){
+    playerHP=0;gameState='lose';snd.death();
     document.getElementById('lose-nights').textContent='Nights survived: '+nightsSurvived;
-    showScreen('lose');
-    if (isLocked) document.exitPointerLock();
+    showScreen('lose');if(isLocked)document.exitPointerLock();
+    exitHiding();isSleeping=false;document.getElementById('sleep-ov').classList.remove('active');
     return;
   }
-
-  if (isHiding) {
-    hideTimeLeft-=dt;
-    if (hideTimeLeft<=0||pressed('KeyH')) { isHiding=false; companionDistract=false; comp.state='follow'; }
+  // Sleeping
+  if(isSleeping){
+    sleepTimer-=dt;
+    document.getElementById('sleep-text').textContent='Sleeping... ('+Math.ceil(Math.max(0,sleepTimer))+'s)';
+    if(sleepTimer<=0){isSleeping=false;playerHP=Math.min(playerHP+1,5);snd.coin();document.getElementById('sleep-ov').classList.remove('active');}
     return;
   }
-
+  if(isHiding){hideTimeLeft-=dt;if(hideTimeLeft<=0||pressed('KeyH'))exitHiding();return;}
   // Movement
-  let mx=0, mz=0;
-  if(held('KeyW')||held('ArrowUp'))    mz-=1;
-  if(held('KeyS')||held('ArrowDown'))  mz+=1;
-  if(held('KeyA')||held('ArrowLeft'))  mx-=1;
-  if(held('KeyD')||held('ArrowRight')) mx+=1;
+  let mx=0,mz=0;
+  if(held('KeyW')||held('ArrowUp'))mz-=1;if(held('KeyS')||held('ArrowDown'))mz+=1;
+  if(held('KeyA')||held('ArrowLeft'))mx-=1;if(held('KeyD')||held('ArrowRight'))mx+=1;
   if(mx&&mz){mx*=0.707;mz*=0.707;}
-
   const sprint=(held('ShiftLeft')||held('ShiftRight'))&&(mx||mz);
   playerRunning=sprint;
-  if (sprint) { runWarningTimer=2.5; assassins.forEach(a=>{if(a.alive)a.state='chase';}); }
-
+  if(sprint){runWarningTimer=2.5;assassins.forEach(a=>{if(a.alive)a.state='chase';});}
   const spd=sprint?SPEED*1.85:SPEED;
-  const sinY=Math.sin(yaw), cosY=Math.cos(yaw);
-  const wx =  mx*cosY + mz*sinY;
-  const wz = -mx*sinY + mz*cosY;
-  const moved=moveXZ(playerPos.x, playerPos.z, wx*spd*dt, wz*spd*dt);
-  playerPos.x=moved.x; playerPos.z=moved.z;
-
+  const sinY=Math.sin(yaw),cosY=Math.cos(yaw);
+  const wx=mx*cosY+mz*sinY,wz=-mx*sinY+mz*cosY;
+  const moved=moveXZ(playerPos.x,playerPos.z,wx*spd*dt,wz*spd*dt);
+  playerPos.x=moved.x;playerPos.z=moved.z;
+  // Staircase check
+  if(floorTransitCD<=0){const pc=Math.floor(playerPos.x),pr=Math.floor(playerPos.z);if(tileAt(pc,pr)==='S')switchFloor();}
   // Attack
-  if (clickFired||pressed('KeyX')||pressed('KeyZ')) { clickFired=false; doAttack(); }
+  if(clickFired||pressed('KeyX')||pressed('KeyZ')){clickFired=false;doAttack();}
   clickFired=false;
-
-  // Work (E)
-  if (pressed('KeyE')&&phase==='day') {
-    WORKERS.forEach(w=>{
-      if (dist2(w,{x:playerPos.x,z:playerPos.z})<WORK_DIST&&w.cooldown<=0) {
-        money+=10; w.cooldown=20; w.flash=2.5; snd.coin();
-      }
-    });
+  // Work
+  if(pressed('KeyE')&&phase==='day'&&currentFloor===1){WORKERS.forEach(w=>{if(dist2(w,{x:playerPos.x,z:playerPos.z})<WORK_DIST&&w.cooldown<=0){money+=10;w.cooldown=20;w.flash=2.5;snd.coin();}});}
+  WORKERS.forEach(w=>{if(w.cooldown>0)w.cooldown-=dt;if(w.flash>0)w.flash-=dt;});
+  // Buy
+  if(pressed('KeyC')&&phase==='day'&&currentFloor===1){
+    if(dist2(SWORD_SHOP,{x:playerPos.x,z:playerPos.z})<SHOP_DIST+0.5&&!hasSword&&money>=SWORD_COST){hasSword=true;money-=SWORD_COST;snd.buy();}
+    if(dist2(GUN_SHOP,{x:playerPos.x,z:playerPos.z})<SHOP_DIST+0.5&&!hasGun&&money>=GUN_COST){hasGun=true;money-=GUN_COST;snd.buy();}
   }
-  WORKERS.forEach(w=>{ if(w.cooldown>0)w.cooldown-=dt; if(w.flash>0)w.flash-=dt; });
-
-  // Buy (C)
-  if (pressed('KeyC')&&phase==='day') {
-    if (dist2(SWORD_SHOP,{x:playerPos.x,z:playerPos.z})<SHOP_DIST+0.5&&!hasSword&&money>=SWORD_COST) { hasSword=true;money-=SWORD_COST;snd.buy(); }
-    if (dist2(GUN_SHOP,  {x:playerPos.x,z:playerPos.z})<SHOP_DIST+0.5&&!hasGun  &&money>=GUN_COST)  { hasGun=true;  money-=GUN_COST;  snd.buy(); }
-  }
-
-  // Hide (H)
-  if (pressed('KeyH')&&phase==='night'&&!isHiding) {
-    for (const s of HIDING_SPOTS) {
-      if (dist2(s,{x:playerPos.x,z:playerPos.z})<HIDE_DIST) {
-        isHiding=true; hideTimeLeft=12; comp.state='distract'; companionDistract=true; snd.hide(); break;
-      }
-    }
-  }
+  // Hide
+  if(pressed('KeyH')&&phase==='night'&&!isHiding){for(const s of ALL_HIDE){if(dist2(s,{x:playerPos.x,z:playerPos.z})<HIDE_DIST){enterHiding(s);break;}}}
+  // Sleep
+  if(pressed('KeyR')&&phase==='day'&&!isSleeping&&playerHP<5){for(const b of BED_SPOTS){if(dist2(b,{x:playerPos.x,z:playerPos.z})<HIDE_DIST){isSleeping=true;sleepTimer=5;document.getElementById('sleep-ov').classList.add('active');break;}}}
 }
 
-// ─── HUD UPDATE ──────────────────────────────────────
-function updateHUD() {
-  // Health
-  document.getElementById('hb-hp').textContent=
-    'HP: '+'♥'.repeat(Math.min(playerHP,5))+'♡'.repeat(Math.max(0,5-playerHP))+
-    (playerHP>5?' +'+(playerHP-5):'');
-
-  // Phase
-  const tcEl=document.getElementById('hb-tc');
-  const tl=Math.ceil(phaseTime);
-  const [lbl,col] = phase==='day'?['☀ DAY','#ffdd44']:phase==='dawn'?['🌅 DAWN','#ffaa44']:['☾ NIGHT','#bb44ff'];
-  tcEl.style.color=col; tcEl.style.borderColor=col+'55';
-  tcEl.textContent=lbl+'  '+(phase==='dawn'?'New day…':phase==='day'?'Night in: '+tl+'s':'Dawn in: '+tl+'s');
-
-  // Money / weapons / nights
-  document.getElementById('hb-tr').innerHTML=
-    '<span style="color:#ffd700">$'+money+'</span><br>'+
-    '<span style="color:'+(hasSword?'#66ff66':'#ff5555')+';font-size:11px">⚔ '+(hasSword?'OWNED':'$30')+'</span>  '+
-    '<span style="color:'+(hasGun?'#66ff66':'#ff5555')+';font-size:11px">🔫 '+(hasGun?'OWNED':'$50')+'</span><br>'+
-    '<span style="color:#555;font-size:11px">Nights: '+nightsSurvived+'</span>';
-
-  // Weapon label + viewmodel
-  document.getElementById('hb-weapon').textContent=hasGun?'🔫 GUN':hasSword?'⚔ SWORD':'· unarmed ·';
-  if (vmSword) vmSword.visible=hasSword&&!hasGun;
-  if (vmGun)   vmGun.visible=hasGun;
-
-  // User
-  document.getElementById('hb-user').textContent=currentUser?'👤 '+currentUser:'';
-
-  // Run warning
+function updateHUD(){
+  document.getElementById('hb-hp').textContent='HP: '+'*'.repeat(Math.min(playerHP,5))+'-'.repeat(Math.max(0,5-playerHP))+(playerHP>5?' +'+(playerHP-5):'');
+  const tcEl=document.getElementById('hb-tc');const tl=Math.ceil(phaseTime);
+  let lbl,col;if(phase==='day'){lbl='DAY';col='#ffdd44';}else if(phase==='dawn'){lbl='DAWN';col='#ffaa44';}else{lbl='NIGHT';col='#bb44ff';}
+  tcEl.style.color=col;tcEl.style.borderColor=col+'55';
+  const fl=currentFloor===1?' [F1]':' [B1]';
+  tcEl.textContent=lbl+'  '+(phase==='dawn'?'New day...':phase==='day'?'Night in: '+tl+'s':'Dawn in: '+tl+'s')+fl;
+  document.getElementById('hb-tr').innerHTML='<span style="color:#ffd700">$'+money+'</span><br><span style="color:'+(hasSword?'#66ff66':'#ff5555')+';font-size:11px">Sword '+(hasSword?'OWNED':'$30')+'</span>  <span style="color:'+(hasGun?'#66ff66':'#ff5555')+';font-size:11px">Gun '+(hasGun?'OWNED':'$50')+'</span><br><span style="color:#555;font-size:11px">Nights: '+nightsSurvived+'</span>';
+  document.getElementById('hb-weapon').textContent=hasGun?'GUN':hasSword?'SWORD':'unarmed';
+  if(vmSword)vmSword.visible=hasSword&&!hasGun;if(vmGun)vmGun.visible=hasGun;
+  document.getElementById('hb-user').textContent=currentUser||'';
   document.getElementById('run-warn').style.display=runWarningTimer>0?'block':'none';
-
-  // Hiding
   const hideEl=document.getElementById('hb-hiding');
-  if (isHiding) { hideEl.style.display='block'; hideEl.textContent='HIDING… Companion distracting! ('+Math.ceil(hideTimeLeft)+'s — H to exit)'; }
+  if(isHiding){const hl=hideSpotRef&&hideSpotRef.type==='bed'?'HIDING UNDER BED':'HIDING IN WARDROBE';hideEl.style.display='block';hideEl.textContent=hl+' ('+Math.ceil(hideTimeLeft)+'s - H to exit)';}
   else hideEl.style.display='none';
-
-  // Hit flash
-  document.getElementById('hit-flash').classList.toggle('active', hitFlashT>0);
-
-  // Interaction prompt
-  const pEl=document.getElementById('hb-prompt');
-  let prompt='';
-  if (!isHiding) {
-    const px=playerPos.x, pz=playerPos.z;
-    if (phase==='day') {
-      for (const w of WORKERS) if(dist2(w,{x:px,z:pz})<WORK_DIST&&w.cooldown<=0){prompt='[E] Work (+$10)';break;}
-      if (!prompt&&dist2(SWORD_SHOP,{x:px,z:pz})<SHOP_DIST+0.5) prompt=hasSword?'⚔ Sword: OWNED':'[C] Buy Sword — $'+SWORD_COST;
-      if (!prompt&&dist2(GUN_SHOP,  {x:px,z:pz})<SHOP_DIST+0.5) prompt=hasGun  ?'🔫 Gun: OWNED'  :'[C] Buy Gun — $'+GUN_COST;
-    } else if (phase==='night') {
-      for (const s of HIDING_SPOTS) if(dist2(s,{x:px,z:pz})<HIDE_DIST+0.5){prompt='[H] Hide in closet (12s)';break;}
+  document.getElementById('hit-flash').classList.toggle('active',hitFlashT>0);
+  const pEl=document.getElementById('hb-prompt');let prompt='';
+  if(!isHiding&&!isSleeping){
+    const px=playerPos.x,pz=playerPos.z;
+    if(phase==='day'&&currentFloor===1){
+      for(const w of WORKERS)if(dist2(w,{x:px,z:pz})<WORK_DIST&&w.cooldown<=0){prompt='[E] Work (+$10)';break;}
+      if(!prompt&&dist2(SWORD_SHOP,{x:px,z:pz})<SHOP_DIST+0.5)prompt=hasSword?'Sword: OWNED':'[C] Buy Sword $'+SWORD_COST;
+      if(!prompt&&dist2(GUN_SHOP,{x:px,z:pz})<SHOP_DIST+0.5)prompt=hasGun?'Gun: OWNED':'[C] Buy Gun $'+GUN_COST;
     }
+    if(phase==='night'){for(const s of ALL_HIDE)if(dist2(s,{x:px,z:pz})<HIDE_DIST+0.5){prompt=s.type==='bed'?'[H] Hide under bed (12s)':'[H] Hide in wardrobe (12s)';break;}}
+    if(phase==='day'){for(const b of BED_SPOTS)if(dist2(b,{x:px,z:pz})<HIDE_DIST+0.5){if(!prompt&&playerHP<5)prompt='[R] Sleep (restore HP)';else if(!prompt)prompt='Bed (HP full)';break;}}
+    const pc=Math.floor(px),pr=Math.floor(pz);
+    if(!prompt&&(tileAt(pc,pr)==='S'||tileAt(pc+1,pr)==='S'||tileAt(pc-1,pr)==='S'||tileAt(pc,pr+1)==='S'||tileAt(pc,pr-1)==='S'))prompt='[Walk onto stairs to change floor]';
   }
-  pEl.style.display=prompt?'block':'none'; pEl.textContent=prompt;
+  pEl.style.display=prompt?'block':'none';pEl.textContent=prompt;
 }
 
-// ─── MAIN UPDATE ─────────────────────────────────────
-function update(dt) {
-  if (gameState!=='playing') return;
-  if (hitFlashT>0) hitFlashT-=dt;
-  updatePhase(dt);
-  if (phase==='dawn') return;
-  updatePlayer(dt);
-  if (gameState!=='playing') return;
+function update(dt){
+  if(gameState!=='playing')return;
+  if(hitFlashT>0)hitFlashT-=dt;
+  updatePhase(dt);if(phase==='dawn')return;
+  updatePlayer(dt);if(gameState!=='playing')return;
   updateCompanion(dt);
-  assassins.forEach(a=>a.update(dt));
-  for (let i=assassins.length-1;i>=0;i--) if(!assassins[i].alive) assassins.splice(i,1);
-  golems.forEach(g=>g.update(dt));
-  for (let i=golems.length-1;i>=0;i--) if(!golems[i].alive) golems.splice(i,1);
+  assassins.forEach(a=>a.update(dt));for(let i=assassins.length-1;i>=0;i--)if(!assassins[i].alive)assassins.splice(i,1);
+  golems.forEach(g=>g.update(dt));for(let i=golems.length-1;i>=0;i--)if(!golems[i].alive)golems.splice(i,1);
   updateHUD();
 }
 
-// ─── RENDER ──────────────────────────────────────────
-function render() {
-  playerPos.y=EYE_H;
-  camera.position.copy(playerPos);
-  camera.rotation.set(pitch, yaw, 0, 'YXZ');
-  playerLight.position.copy(playerPos);
-  if (vmSword&&swingT>0) { vmSword.rotation.x=0.18+Math.sin(swingT/0.28*Math.PI)*0.18; }
-  renderer.clear();
-  renderer.render(scene, camera);
-  renderer.clearDepth();
-  renderer.render(vmScene, vmCam);
+function render(){
+  if(wardrobePeekActive&&hideSpotRef){camera.position.set(hideSpotRef.x,1.3,hideSpotRef.z);camera.rotation.set(0,yaw,0,'YXZ');}
+  else{playerPos.y=EYE_H;camera.position.copy(playerPos);camera.rotation.set(pitch,yaw,0,'YXZ');}
+  playerLight.position.set(playerPos.x,EYE_H,playerPos.z);
+  if(vmSword&&swingT>0)vmSword.rotation.x=0.18+Math.sin(swingT/0.28*Math.PI)*0.18;
+  renderer.clear();renderer.render(scene,camera);renderer.clearDepth();renderer.render(vmScene,vmCam);
 }
 
-// ─── LOGIN FORM ──────────────────────────────────────
-function doLogin() {
-  if (loginPending) return;
-  const uname=document.getElementById('l-user').value.trim();
-  const pw=document.getElementById('l-pass').value;
-  const msgEl=document.getElementById('login-msg');
-  if (!uname){msgEl.className='err';msgEl.textContent='✗ Please enter a username.';return;}
-  if (!pw)   {msgEl.className='err';msgEl.textContent='✗ Please enter a password.';return;}
-  loginPending=true; msgEl.className=''; msgEl.textContent='Verifying…';
-  hashPassword(pw).then(hash=>{
-    loginPending=false;
-    if (savedAccounts[uname]) {
-      if (savedAccounts[uname].pwHash===hash) {
-        currentUser=uname; loadProgress();
-        msgEl.className='ok'; msgEl.textContent='✓ Welcome back, '+currentUser+'!'; loginMsgTimer=LOGIN_SHOW;
-      } else { msgEl.className='err'; msgEl.textContent='✗ Wrong password.'; }
-    } else {
-      savedAccounts[uname]={pwHash:hash,save:null};
-      localStorage.setItem('asnAccounts',JSON.stringify(savedAccounts));
-      currentUser=uname;
-      msgEl.className='ok'; msgEl.textContent='✓ Account created! Welcome, '+currentUser+'!'; loginMsgTimer=LOGIN_SHOW;
-    }
-  });
+function doLogin(){
+  if(loginPending)return;const uname=document.getElementById('l-user').value.trim(),pw=document.getElementById('l-pass').value,msgEl=document.getElementById('login-msg');
+  if(!uname){msgEl.className='err';msgEl.textContent='Please enter a username.';return;}
+  if(!pw){msgEl.className='err';msgEl.textContent='Please enter a password.';return;}
+  loginPending=true;msgEl.className='';msgEl.textContent='Verifying...';
+  hashPassword(pw).then(hash=>{loginPending=false;if(savedAccounts[uname]){if(savedAccounts[uname].pwHash===hash){currentUser=uname;loadProgress();msgEl.className='ok';msgEl.textContent='Welcome back, '+currentUser+'!';loginMsgTimer=LOGIN_SHOW;}else{msgEl.className='err';msgEl.textContent='Wrong password.';}}else{savedAccounts[uname]={pwHash:hash,save:null};localStorage.setItem('asnAccounts',JSON.stringify(savedAccounts));currentUser=uname;msgEl.className='ok';msgEl.textContent='Account created! Welcome, '+currentUser+'!';loginMsgTimer=LOGIN_SHOW;}});
 }
+function refreshTitle(){document.getElementById('title-user').textContent=currentUser?'Logged in: '+currentUser+' | Nights: '+nightsSurvived:'';}
 
-function refreshTitle() {
-  document.getElementById('title-user').textContent=currentUser
-    ?'👤 Logged in: '+currentUser+'   ·   Nights survived: '+nightsSurvived:'';
-}
+function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();vmCam.aspect=w/h;vmCam.updateProjectionMatrix();}
+window.addEventListener('resize',resize);
 
-// ─── RESIZE ──────────────────────────────────────────
-function resize() {
-  const w=canvas.clientWidth, h=canvas.clientHeight; if(!w||!h) return;
-  renderer.setSize(w,h,false);
-  camera.aspect=w/h; camera.updateProjectionMatrix();
-  vmCam.aspect=w/h;  vmCam.updateProjectionMatrix();
-}
-window.addEventListener('resize', resize);
-
-// ─── GAME LOOP ───────────────────────────────────────
-function gameLoop(ts) {
-  const dt=Math.min((ts-lastFrameTime)/1000, 0.05); lastFrameTime=ts;
-
-  // Login message auto-dismiss
-  if (gameState==='login'&&loginMsgTimer>0) {
-    loginMsgTimer-=dt;
-    if (loginMsgTimer<=0&&currentUser) { gameState='title'; showScreen('title'); refreshTitle(); document.getElementById('l-user').value=''; document.getElementById('l-pass').value=''; }
-  }
-
-  if (gameState==='title') {
-    if (pressed('Escape')) { gameState='login'; showScreen('login'); document.getElementById('login-msg').textContent=''; document.getElementById('login-msg').className=''; }
-    else if (pressed('Enter')) initGame(!!currentUser);
-  }
-  if (gameState==='login' && !loginPending && pressed('Escape')) { gameState='title'; showScreen('title'); refreshTitle(); }
-  if (gameState==='lose'  && pressed('Enter')) initGame(false);
-  if (gameState==='playing' && pressed('Escape') && isLocked) document.exitPointerLock();
-
-  update(dt);
-  if (gameState==='playing') render();
+function gameLoop(ts){
+  const dt=Math.min((ts-lastFrameTime)/1000,0.05);lastFrameTime=ts;
+  if(gameState==='login'&&loginMsgTimer>0){loginMsgTimer-=dt;if(loginMsgTimer<=0&&currentUser){gameState='title';showScreen('title');refreshTitle();document.getElementById('l-user').value='';document.getElementById('l-pass').value='';}}
+  if(gameState==='title'){if(pressed('Escape')){gameState='login';showScreen('login');document.getElementById('login-msg').textContent='';document.getElementById('login-msg').className='';}else if(pressed('Enter'))initGame(!!currentUser);}
+  if(gameState==='login'&&!loginPending&&pressed('Escape')){gameState='title';showScreen('title');refreshTitle();}
+  if(gameState==='lose'&&pressed('Enter'))initGame(false);
+  if(gameState==='playing'&&pressed('Escape')&&isLocked)document.exitPointerLock();
+  update(dt);if(gameState==='playing')render();
   requestAnimationFrame(gameLoop);
 }
 
-// ─── BOOT ────────────────────────────────────────────
-(function boot() {
-  buildLevel(); buildViewmodel(); buildCompanion(); resize();
-  if(vmSword) vmSword.visible=false;
-  if(vmGun)   vmGun.visible=false;
-  showScreen('title'); refreshTitle();
-
-  document.getElementById('start-btn') .addEventListener('click', ()=>initGame(!!currentUser));
-  document.getElementById('retry-btn') .addEventListener('click', ()=>initGame(false));
-  document.getElementById('l-submit')  .addEventListener('click', doLogin);
-  document.getElementById('l-pass')    .addEventListener('keydown', e=>{ if(e.key==='Enter')doLogin(); });
-  document.getElementById('l-user')    .addEventListener('keydown', e=>{ if(e.key==='Enter')document.getElementById('l-pass').focus(); });
-
-  // Mobile ATK
+(function boot(){
+  buildLevel();buildViewmodel();buildCompanion();resize();
+  if(vmSword)vmSword.visible=false;if(vmGun)vmGun.visible=false;
+  showScreen('title');refreshTitle();
+  document.getElementById('start-btn').addEventListener('click',()=>initGame(!!currentUser));
+  document.getElementById('retry-btn').addEventListener('click',()=>initGame(false));
+  document.getElementById('l-submit').addEventListener('click',doLogin);
+  document.getElementById('l-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+  document.getElementById('l-user').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('l-pass').focus();});
   const mobAtk=document.getElementById('mob-atk');
   mobAtk.addEventListener('touchstart',e=>{e.preventDefault();clickFired=true;},{passive:false});
-  mobAtk.addEventListener('mousedown', ()=>clickFired=true);
-
-  // TODO: Add mobile touch-look (right-side drag for yaw/pitch)
-  document.getElementById('mob-look-btn').addEventListener('click',()=>{
-    if(gameState==='playing'&&!isLocked) canvas.requestPointerLock();
-  });
-
-  // Help overlay
+  mobAtk.addEventListener('mousedown',()=>clickFired=true);
+  document.getElementById('mob-look-btn').addEventListener('click',()=>{if(gameState==='playing'&&!isLocked)canvas.requestPointerLock();});
   const helpOv=document.getElementById('help-overlay');
-  document.getElementById('info-btn')  .addEventListener('click',       ()=>helpOv.style.display='flex');
-  document.getElementById('info-btn')  .addEventListener('touchstart',  e=>{e.preventDefault();helpOv.style.display='flex';},{passive:false});
-  document.getElementById('help-close').addEventListener('click',       ()=>helpOv.style.display='none');
-  document.getElementById('help-close').addEventListener('touchstart',  e=>{e.preventDefault();helpOv.style.display='none';},{passive:false});
-
-  // Mobile D-pad / action buttons
+  document.getElementById('info-btn').addEventListener('click',()=>helpOv.style.display='flex');
+  document.getElementById('info-btn').addEventListener('touchstart',e=>{e.preventDefault();helpOv.style.display='flex';},{passive:false});
+  document.getElementById('help-close').addEventListener('click',()=>helpOv.style.display='none');
+  document.getElementById('help-close').addEventListener('touchstart',e=>{e.preventDefault();helpOv.style.display='none';},{passive:false});
   document.querySelectorAll('.ctrl-btn[data-key]').forEach(btn=>{
     const key=btn.dataset.key;
     const press=()=>{if(!keys[key]){keys[key]=true;kDown[key]=true;}};
     const release=()=>keys[key]=false;
-    btn.addEventListener('touchstart', e=>{e.preventDefault();press();},{passive:false});
-    btn.addEventListener('touchend',   e=>{e.preventDefault();release();},{passive:false});
+    btn.addEventListener('touchstart',e=>{e.preventDefault();press();},{passive:false});
+    btn.addEventListener('touchend',e=>{e.preventDefault();release();},{passive:false});
     btn.addEventListener('touchcancel',e=>{e.preventDefault();release();},{passive:false});
-    btn.addEventListener('mousedown',  e=>{e.preventDefault();press();});
-    btn.addEventListener('mouseup',    ()=>release());
-    btn.addEventListener('mouseleave', ()=>release());
+    btn.addEventListener('mousedown',e=>{e.preventDefault();press();});
+    btn.addEventListener('mouseup',()=>release());
+    btn.addEventListener('mouseleave',()=>release());
   });
-
   requestAnimationFrame(ts=>{lastFrameTime=ts;requestAnimationFrame(gameLoop);});
 })();
-
-// ─── TODO LIST ───────────────────────────────────────
-// TODO: Mobile touch-look — right-side swipe for yaw/pitch
-// TODO: Jump / dodge mechanic (Space) — short lunge
-// TODO: Re-add Doctor NPC with dialog overlay
-// TODO: Footstep + ambient hotel sounds
-// TODO: Billboard particle sprites for hit effects
-// TODO: Door-open animation for D tiles
-// TODO: Gun ammo system with reloading
-// TODO: Multiple nights with increasing difficulty shown on title
 </script>
 </body>
 </html>
