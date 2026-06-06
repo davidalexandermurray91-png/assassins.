@@ -374,30 +374,30 @@ const MAP_F1 = [
 ];
 const MAP_B1 = [
   "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
-  "W.......W.......W...............WW",
-  "W.......W.......W...............WW",
-  "W.......W.......W...............SW",
-  "W.......W.......W...............WW",
-  "WWWWDWWWWWWWDWWWWWWWWWWWWWWWWWWWWW",
+  "W.......W.......W................WW",
+  "W.......W.......W................WW",
+  "W.......W.......W................SW",
+  "W.......W.......W................WW",
+  "WWWWDWWWWWWWDWWWWWWWWWWWWWWWWDWWWWW",
   "W.................................W",
   "W.................................W",
   "W.................................W",
   "W.................................W",
-  "WWWWWWDWWWWWWWWWWWWWWWWWDWWWWWWWWW",
-  "W..C....W.................W..C...W",
-  "W.......W.................W......W",
-  "W.......W.................W......W",
-  "W.......W.................W......W",
-  "WWWWDWWWWWWWWWWWWWWWWWWWWWWWWDWWWW",
+  "WWWWWWDWWWWWWWWWWWWWWWWWDWWWWWWWWWW",
+  "W..C....W.................W..C....W",
+  "W.......W.................W.......W",
+  "W.......W.................W.......W",
+  "W.......W.................W.......W",
+  "WWWWDWWWWWWWWWWWWWWWWWWWWWWWWDWWWWW",
   "W.................................W",
   "W.................................W",
   "W.................................W",
-  "W...............................SW",
-  "WWWWWWDWWWWWWWWWWWWWWWWWDWWWWWWWWW",
-  "W..B....W.................W..B...W",
-  "W.......W.................W......W",
-  "W.......W.................W......W",
-  "W.......W.................W......W",
+  "W................................SW",
+  "WWWWWWDWWWWWWWWWWWWWWWWWDWWWWWWDWWWW",
+  "W..B....W.................W..B....W",
+  "W.......W.................W.......W",
+  "W.......W.................W.......W",
+  "W.......W.................W.......W",
   "W.................................W",
   "W.................................W",
   "W.................................W",
@@ -600,9 +600,9 @@ function buildLevel() {
     }
   });
   // Accent lights
-  const lp=currentFloor===1?[[4,2],[12,2],[20,2],[4,10],[12,10],[20,10],[4,18],[12,18],[20,18],[17,25]]:[[8,3],[8,12],[8,22],[26,3],[26,12],[26,22],[17,7],[17,17],[4,7],[30,7],[17,25]];
-  const lInt=currentFloor===0?1.6:0.9, lRng=currentFloor===0?14:10;
-  lp.forEach(p=>{const l=new THREE.PointLight(0xffddaa,lInt,lRng);l.position.set(p[0],WALL_H*0.85,p[1]);addLvl(l);});
+  const lp=currentFloor===1?[[4,2],[12,2],[20,2],[4,10],[12,10],[20,10],[4,18],[12,18],[20,18],[17,25]]:[[4,3],[12,3],[26,3],[32,3],[4,8],[12,8],[20,8],[28,8],[4,13],[12,13],[26,13],[4,18],[12,18],[26,18],[32,18],[4,23],[20,23],[32,23],[17,8],[17,18]];
+  const lInt=currentFloor===0?2.4:0.9, lRng=currentFloor===0?16:10;
+  lp.forEach(p=>{const l=new THREE.PointLight(0xffeec0,lInt,lRng);l.position.set(p[0],WALL_H*0.85,p[1]);addLvl(l);});
 }
 
 let vmSword,vmGun;
@@ -736,20 +736,29 @@ function switchFloor(){
   assassins.forEach(a=>scene.remove(a.mesh));assassins.length=0;
   golems.forEach(g=>scene.remove(g.mesh));golems.length=0;
   buildLevel();buildCompanion();
-  // Nudge player onto a safe open tile next to the stairs so they don't
-  // re-trigger the staircase or get wedged against the narrow corridor walls.
-  const pc=Math.floor(playerPos.x),pr=Math.floor(playerPos.z);
-  const candidates=[];
-  for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++){
-    const nc=pc+dc,nr=pr+dr,t=tileAt(nc,nr);
-    if(t==='.'&&!wallAt(nc+0.5,nr+0.5))candidates.push({x:nc+0.5,z:nr+0.5,d:Math.abs(dc)+Math.abs(dr)});
+  // Find the destination stair closest to where the player switched from,
+  // then drop them onto a clearly-open tile next to it (not on a stair).
+  let nearestS=null,bd=Infinity;
+  const map=activeMap();
+  for(let r=0;r<map.length;r++)for(let c=0;c<map[r].length;c++){
+    if(map[r][c]==='S'){
+      const d=Math.hypot(c+0.5-playerPos.x,r+0.5-playerPos.z);
+      if(d<bd){bd=d;nearestS={c,r};}
+    }
   }
-  candidates.sort((a,b)=>a.d-b.d);
-  if(candidates.length){playerPos.x=candidates[0].x;playerPos.z=candidates[0].z;}
+  if(nearestS){
+    const dirs=[[0,1],[-1,1],[1,1],[-1,0],[1,0],[0,-1],[-1,-1],[1,-1]];
+    for(const [dc,dr] of dirs){
+      const nc=nearestS.c+dc,nr=nearestS.r+dr;
+      if(tileAt(nc,nr)==='.'&&!wallAt(nc+0.5,nr+0.5)){
+        playerPos.x=nc+0.5;playerPos.z=nr+0.5;break;
+      }
+    }
+  }
   comp.x=playerPos.x;comp.z=playerPos.z+0.8;
   document.getElementById('floor-msg').textContent=msg;
   document.getElementById('floor-msg').classList.add('active');
-  floorMsgTimer=1.5;floorTransitCD=2.5;
+  floorMsgTimer=1.5;floorTransitCD=4.0;
   applyLighting();
 }
 
@@ -757,7 +766,7 @@ function genSchedule(n){return[{at:0,count:2+Math.floor(n/2)},{at:20,count:1+Mat
 function spawnAssassins(n){for(let i=0;i<n;i++){let sx,sz,att=0;do{sx=2+Math.random()*(COLS-4);sz=ROWS-3+Math.random()*1.5;att++;}while(wallPt(sx,sz)&&att<20);assassins.push(new Assassin(sx,sz));}}
 
 function applyLighting(){
-  if(currentFloor===0){ambLight.color.setHex(0x554a3a);ambLight.intensity=2.2;playerLight.color.setHex(0xffeec0);playerLight.intensity=3.4;playerLight.distance=22;scene.fog.color.setHex(0x141414);scene.fog.density=0.018;return;}
+  if(currentFloor===0){ambLight.color.setHex(0xa89878);ambLight.intensity=5.0;playerLight.color.setHex(0xfff1c8);playerLight.intensity=4.5;playerLight.distance=30;scene.fog.color.setHex(0x4a3a28);scene.fog.density=0.003;return;}
   if(phase==='day'){ambLight.color.setHex(0xaa9978);ambLight.intensity=2.2;playerLight.color.setHex(0xffddaa);playerLight.intensity=1.0;playerLight.distance=18;scene.fog.color.setHex(0x5a4a30);scene.fog.density=0.010;}
   else if(phase==='night'){ambLight.color.setHex(0x7080a8);ambLight.intensity=1.9;playerLight.color.setHex(0xffd0aa);playerLight.intensity=1.4;playerLight.distance=18;scene.fog.color.setHex(0x1a2238);scene.fog.density=0.012;}
   else{ambLight.color.setHex(0xa0907a);ambLight.intensity=2.0;playerLight.color.setHex(0xffc899);playerLight.intensity=1.2;playerLight.distance=18;scene.fog.color.setHex(0x3a2a18);scene.fog.density=0.011;}
