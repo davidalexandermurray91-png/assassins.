@@ -374,30 +374,30 @@ const MAP_F1 = [
 ];
 const MAP_B1 = [
   "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
-  "W.......W.......W...............WW",
-  "W.......W.......W...............WW",
-  "W.......W.......W...............SW",
-  "W.......W.......W...............WW",
-  "WWWWDWWWWWWWDWWWWWWWWWWWWWWWWWWWWW",
+  "W.......W.......W................WW",
+  "W.......W.......W................WW",
+  "W.......W.......W................SW",
+  "W.......W.......W................WW",
+  "WWWWDWWWWWWWDWWWWWWWWWWWWWWWWDWWWWW",
   "W.................................W",
   "W.................................W",
   "W.................................W",
   "W.................................W",
-  "WWWWWWDWWWWWWWWWWWWWWWWWDWWWWWWWWW",
-  "W..C....W.................W..C...W",
-  "W.......W.................W......W",
-  "W.......W.................W......W",
-  "W.......W.................W......W",
-  "WWWWDWWWWWWWWWWWWWWWWWWWWWWWWDWWWW",
+  "WWWWWWDWWWWWWWWWWWWWWWWWDWWWWWWWWWW",
+  "W..C....W.................W..C....W",
+  "W.......W.................W.......W",
+  "W.......W.................W.......W",
+  "W.......W.................W.......W",
+  "WWWWDWWWWWWWWWWWWWWWWWWWWWWWWDWWWWW",
   "W.................................W",
   "W.................................W",
   "W.................................W",
-  "W...............................SW",
-  "WWWWWWDWWWWWWWWWWWWWWWWWDWWWWWWWWW",
-  "W..B....W.................W..B...W",
-  "W.......W.................W......W",
-  "W.......W.................W......W",
-  "W.......W.................W......W",
+  "W................................SW",
+  "WWWWWWDWWWWWWWWWWWWWWWWWDWWWWWWDWWWW",
+  "W..B....W.................W..B....W",
+  "W.......W.................W.......W",
+  "W.......W.................W.......W",
+  "W.......W.................W.......W",
   "W.................................W",
   "W.................................W",
   "W.................................W",
@@ -408,7 +408,7 @@ const COLS = 35, ROWS = 30;
 let currentFloor = 1;
 function activeMap() { return currentFloor === 1 ? MAP_F1 : MAP_B1; }
 
-const WALL_H=2.8, EYE_H=1.55, PLAYER_R=0.28, DAY_DUR=60, NIGHT_DUR=90, DAWN_DUR=4;
+const WALL_H=2.8, EYE_H=1.55, PLAYER_R=0.22, DAY_DUR=60, NIGHT_DUR=90, DAWN_DUR=4;
 const GUN_COST=50, SWORD_COST=30, DETECT_R=7, SWORD_R=1.6, ENEMY_ATK_R=1.1;
 const SPEED=4.5, MOUSE_SENS=0.0022, HIDE_DIST=2.0, WORK_DIST=2.5, SHOP_DIST=2.0, LOGIN_SHOW=1.6;
 
@@ -494,7 +494,8 @@ const ambLight=new THREE.AmbientLight(0x403020,1.2);
 const playerLight=new THREE.PointLight(0xffddaa,2.6,14);
 const fillLight=new THREE.DirectionalLight(0x8899bb,0.55);
 fillLight.position.set(0,5,0);
-scene.add(ambLight,playerLight,fillLight);
+const hemiLight=new THREE.HemisphereLight(0xffeec0,0x332218,0);
+scene.add(ambLight,playerLight,fillLight,hemiLight);
 
 const M={
   wall:new THREE.MeshLambertMaterial({color:0x3d2b1f}),
@@ -510,7 +511,14 @@ const M={
   cmpHead:new THREE.MeshLambertMaterial({color:0x0099bb}),
   asnBody:new THREE.MeshLambertMaterial({color:0xaa1100}),
   asnHead:new THREE.MeshLambertMaterial({color:0x882200}),
-  asnEye:new THREE.MeshBasicMaterial({color:0xff4444}),
+  asnEye:new THREE.MeshBasicMaterial({color:0xff2222}),
+  asnCloak:new THREE.MeshBasicMaterial({color:0x14060a}),
+  asnHood:new THREE.MeshBasicMaterial({color:0x070205}),
+  asnFace:new THREE.MeshBasicMaterial({color:0xd8c8b0}),
+  asnClaw:new THREE.MeshBasicMaterial({color:0xdadada}),
+  asnMouth:new THREE.MeshBasicMaterial({color:0x880000}),
+  asnSocket:new THREE.MeshBasicMaterial({color:0x000000}),
+  asnBlood:new THREE.MeshBasicMaterial({color:0x660000}),
   arm:new THREE.MeshLambertMaterial({color:0xc8824a}),
   blade:new THREE.MeshLambertMaterial({color:0xcccccc}),
   hilt:new THREE.MeshLambertMaterial({color:0x886600}),
@@ -595,8 +603,9 @@ function buildLevel() {
     }
   });
   // Accent lights
-  const lp=currentFloor===1?[[4,2],[12,2],[20,2],[4,10],[12,10],[20,10],[4,18],[12,18],[20,18],[17,25]]:[[8,3],[8,12],[8,22],[26,12],[26,22],[17,7],[17,17]];
-  lp.forEach(p=>{const l=new THREE.PointLight(0xffddaa,0.9,10);l.position.set(p[0],WALL_H*0.85,p[1]);addLvl(l);});
+  const lp=currentFloor===1?[[4,2],[12,2],[20,2],[4,10],[12,10],[20,10],[4,18],[12,18],[20,18],[17,25]]:[[4,3],[12,3],[26,3],[32,3],[4,8],[12,8],[20,8],[28,8],[4,13],[12,13],[26,13],[4,18],[12,18],[26,18],[32,18],[4,23],[20,23],[32,23],[17,8],[17,18]];
+  const lInt=currentFloor===0?2.4:0.9, lRng=currentFloor===0?16:10;
+  lp.forEach(p=>{const l=new THREE.PointLight(0xffeec0,lInt,lRng);l.position.set(p[0],WALL_H*0.85,p[1]);addLvl(l);});
 }
 
 let vmSword,vmGun;
@@ -640,7 +649,45 @@ function updateCompanion(dt){
 
 const assassins=[];
 class Assassin{
-  constructor(x,z){this.pos=new THREE.Vector3(x,0,z);this.hp=5;this.maxHp=5;this.alive=true;this.state='patrol';this.stunT=0;this.atkCD=0;this.pAngle=Math.random()*Math.PI*2;this.pTimer=1+Math.random()*2;this.spd=2.0+Math.random()*0.5;this.distracted=false;this.mesh=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(0.42,1.25,0.32),M.asnBody);body.position.y=0.625;const head=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.34,0.34),M.asnHead);head.position.y=1.38;const eg=new THREE.BoxGeometry(0.07,0.055,0.01);const eL=new THREE.Mesh(eg,M.asnEye);eL.position.set(-0.09,1.40,0.17);const eR=new THREE.Mesh(eg,M.asnEye);eR.position.set(0.09,1.40,0.17);this.mesh.add(body,head,eL,eR);this.mesh.position.copy(this.pos);scene.add(this.mesh);}
+  constructor(x,z){
+    this.pos=new THREE.Vector3(x,0,z);
+    this.hp=8;this.maxHp=8;
+    this.alive=true;this.state='patrol';this.stunT=0;this.atkCD=0;
+    this.pAngle=Math.random()*Math.PI*2;this.pTimer=1+Math.random()*2;
+    this.spd=2.4+Math.random()*0.6;
+    this.distracted=false;
+    this.mesh=new THREE.Group();
+    const cloak=new THREE.Mesh(new THREE.ConeGeometry(0.52,1.85,8),M.asnCloak);cloak.position.y=0.92;
+    const torso=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.60,0.34),M.asnCloak);torso.position.y=1.40;
+    const shL=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.34,0.26),M.asnCloak);shL.position.set(-0.34,1.58,0);shL.rotation.z=-0.30;
+    const shR=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.34,0.26),M.asnCloak);shR.position.set(0.34,1.58,0);shR.rotation.z=0.30;
+    const hoodBack=new THREE.Mesh(new THREE.ConeGeometry(0.34,0.62,8),M.asnHood);hoodBack.position.set(0,2.02,-0.05);
+    const hoodSideL=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.42,0.34),M.asnHood);hoodSideL.position.set(-0.22,1.82,0.04);hoodSideL.rotation.z=0.20;
+    const hoodSideR=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.42,0.34),M.asnHood);hoodSideR.position.set(0.22,1.82,0.04);hoodSideR.rotation.z=-0.20;
+    const skull=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.36,0.28),M.asnFace);skull.position.set(0,1.78,0.10);
+    const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.22),M.asnFace);jaw.position.set(0,1.58,0.12);
+    const socketL=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.10,0.02),M.asnSocket);socketL.position.set(-0.08,1.84,0.24);
+    const socketR=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.10,0.02),M.asnSocket);socketR.position.set(0.08,1.84,0.24);
+    const eg=new THREE.BoxGeometry(0.045,0.045,0.012);
+    const eL=new THREE.Mesh(eg,M.asnEye);eL.position.set(-0.08,1.84,0.255);
+    const eR=new THREE.Mesh(eg,M.asnEye);eR.position.set(0.08,1.84,0.255);
+    const nose=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.08,0.02),M.asnSocket);nose.position.set(0,1.74,0.245);
+    const mouth=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.05,0.012),M.asnMouth);mouth.position.set(0,1.60,0.235);
+    const tg=new THREE.BoxGeometry(0.03,0.07,0.012);
+    for(let i=0;i<5;i++){
+      const tU=new THREE.Mesh(tg,M.asnFace);tU.position.set(-0.07+i*0.035,1.635,0.243);this.mesh&&this.mesh.add(tU);
+    }
+    const blood=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.18,0.012),M.asnBlood);blood.position.set(0.02,1.46,0.18);blood.rotation.z=0.15;
+    const cg=new THREE.BoxGeometry(0.035,0.42,0.035);
+    const cL1=new THREE.Mesh(cg,M.asnClaw);cL1.position.set(-0.48,0.78,0.06);cL1.rotation.set(0.2,0,0.30);
+    const cL2=new THREE.Mesh(cg,M.asnClaw);cL2.position.set(-0.42,0.78,0.16);cL2.rotation.set(0.2,0,0.35);
+    const cL3=new THREE.Mesh(cg,M.asnClaw);cL3.position.set(-0.52,0.78,-0.04);cL3.rotation.set(0.2,0,0.25);
+    const cR1=new THREE.Mesh(cg,M.asnClaw);cR1.position.set(0.48,0.78,0.06);cR1.rotation.set(0.2,0,-0.30);
+    const cR2=new THREE.Mesh(cg,M.asnClaw);cR2.position.set(0.42,0.78,0.16);cR2.rotation.set(0.2,0,-0.35);
+    const cR3=new THREE.Mesh(cg,M.asnClaw);cR3.position.set(0.52,0.78,-0.04);cR3.rotation.set(0.2,0,-0.25);
+    this.mesh.add(cloak,torso,shL,shR,hoodBack,hoodSideL,hoodSideR,skull,jaw,socketL,socketR,eL,eR,nose,mouth,blood,cL1,cL2,cL3,cR1,cR2,cR3);
+    this.mesh.position.copy(this.pos);scene.add(this.mesh);
+  }
   dtp(){return Math.hypot(playerPos.x-this.pos.x,playerPos.z-this.pos.z);}
   moveTo(tx,tz,spd,dt){const dx=tx-this.pos.x,dz=tz-this.pos.z,d=Math.hypot(dx,dz);if(d<0.08)return;const s=spd*dt,r=0.22,nx=dx/d*s,nz=dz/d*s;if(!isWall(Math.floor(this.pos.x+nx+r*Math.sign(dx)),Math.floor(this.pos.z)))this.pos.x+=nx;if(!isWall(Math.floor(this.pos.x),Math.floor(this.pos.z+nz+r*Math.sign(dz))))this.pos.z+=nz;if(d>0.15)this.mesh.rotation.y=Math.atan2(tx-this.pos.x,tz-this.pos.z);}
   patrol(dt){this.state='patrol';this.pTimer-=dt;if(this.pTimer<=0){this.pAngle=Math.random()*Math.PI*2;this.pTimer=1.5+Math.random()*2.5;}this.moveTo(this.pos.x+Math.sin(this.pAngle),this.pos.z+Math.cos(this.pAngle),1.2,dt);}
@@ -703,9 +750,21 @@ function switchFloor(){
   assassins.forEach(a=>scene.remove(a.mesh));assassins.length=0;
   golems.forEach(g=>scene.remove(g.mesh));golems.length=0;
   buildLevel();buildCompanion();
+  // Hardcoded landing spots well inside the open main hall on each side
+  // of the level, so the player never spawns wedged against walls or
+  // stuck on top of a stair tile.
+  const LANDINGS={
+    0:[{x:17.5,z:8.5},{x:17.5,z:18.5}],   // basement hall north/south
+    1:[{x:17.5,z:7.5},{x:17.5,z:25.5}]    // floor 1 lobby / hall
+  };
+  const opts=LANDINGS[currentFloor];
+  let pick=opts[0],bd=Infinity;
+  for(const o of opts){const d=Math.hypot(o.x-playerPos.x,o.z-playerPos.z);if(d<bd){bd=d;pick=o;}}
+  playerPos.x=pick.x;playerPos.z=pick.z;
+  comp.x=pick.x;comp.z=pick.z+0.8;
   document.getElementById('floor-msg').textContent=msg;
   document.getElementById('floor-msg').classList.add('active');
-  floorMsgTimer=1.5;floorTransitCD=1.0;
+  floorMsgTimer=1.5;floorTransitCD=4.0;
   applyLighting();
 }
 
@@ -713,7 +772,8 @@ function genSchedule(n){return[{at:0,count:2+Math.floor(n/2)},{at:20,count:1+Mat
 function spawnAssassins(n){for(let i=0;i<n;i++){let sx,sz,att=0;do{sx=2+Math.random()*(COLS-4);sz=ROWS-3+Math.random()*1.5;att++;}while(wallPt(sx,sz)&&att<20);assassins.push(new Assassin(sx,sz));}}
 
 function applyLighting(){
-  if(currentFloor===0){ambLight.color.setHex(0x303030);ambLight.intensity=1.0;playerLight.color.setHex(0xffddaa);playerLight.intensity=2.0;playerLight.distance=12;scene.fog.color.setHex(0x0a0a0a);scene.fog.density=0.04;return;}
+  if(currentFloor===0){ambLight.color.setHex(0xc8b898);ambLight.intensity=5.5;playerLight.color.setHex(0xfff1c8);playerLight.intensity=4.0;playerLight.distance=30;hemiLight.intensity=3.5;scene.fog.color.setHex(0x4a3a28);scene.fog.density=0.002;return;}
+  hemiLight.intensity=0;
   if(phase==='day'){ambLight.color.setHex(0xaa9978);ambLight.intensity=2.2;playerLight.color.setHex(0xffddaa);playerLight.intensity=1.0;playerLight.distance=18;scene.fog.color.setHex(0x5a4a30);scene.fog.density=0.010;}
   else if(phase==='night'){ambLight.color.setHex(0x7080a8);ambLight.intensity=1.9;playerLight.color.setHex(0xffd0aa);playerLight.intensity=1.4;playerLight.distance=18;scene.fog.color.setHex(0x1a2238);scene.fog.density=0.012;}
   else{ambLight.color.setHex(0xa0907a);ambLight.intensity=2.0;playerLight.color.setHex(0xffc899);playerLight.intensity=1.2;playerLight.distance=18;scene.fog.color.setHex(0x3a2a18);scene.fog.density=0.011;}
