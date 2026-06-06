@@ -494,7 +494,8 @@ const ambLight=new THREE.AmbientLight(0x403020,1.2);
 const playerLight=new THREE.PointLight(0xffddaa,2.6,14);
 const fillLight=new THREE.DirectionalLight(0x8899bb,0.55);
 fillLight.position.set(0,5,0);
-scene.add(ambLight,playerLight,fillLight);
+const hemiLight=new THREE.HemisphereLight(0xffeec0,0x332218,0);
+scene.add(ambLight,playerLight,fillLight,hemiLight);
 
 const M={
   wall:new THREE.MeshLambertMaterial({color:0x3d2b1f}),
@@ -511,11 +512,13 @@ const M={
   asnBody:new THREE.MeshLambertMaterial({color:0xaa1100}),
   asnHead:new THREE.MeshLambertMaterial({color:0x882200}),
   asnEye:new THREE.MeshBasicMaterial({color:0xff2222}),
-  asnCloak:new THREE.MeshLambertMaterial({color:0x0a0306}),
-  asnHood:new THREE.MeshLambertMaterial({color:0x070103}),
-  asnFace:new THREE.MeshLambertMaterial({color:0x382828}),
-  asnClaw:new THREE.MeshLambertMaterial({color:0x8a8a8a}),
-  asnMouth:new THREE.MeshBasicMaterial({color:0x550000}),
+  asnCloak:new THREE.MeshBasicMaterial({color:0x14060a}),
+  asnHood:new THREE.MeshBasicMaterial({color:0x070205}),
+  asnFace:new THREE.MeshBasicMaterial({color:0xd8c8b0}),
+  asnClaw:new THREE.MeshBasicMaterial({color:0xdadada}),
+  asnMouth:new THREE.MeshBasicMaterial({color:0x880000}),
+  asnSocket:new THREE.MeshBasicMaterial({color:0x000000}),
+  asnBlood:new THREE.MeshBasicMaterial({color:0x660000}),
   arm:new THREE.MeshLambertMaterial({color:0xc8824a}),
   blade:new THREE.MeshLambertMaterial({color:0xcccccc}),
   hilt:new THREE.MeshLambertMaterial({color:0x886600}),
@@ -654,24 +657,35 @@ class Assassin{
     this.spd=2.4+Math.random()*0.6;
     this.distracted=false;
     this.mesh=new THREE.Group();
-    const cloak=new THREE.Mesh(new THREE.ConeGeometry(0.46,1.75,7),M.asnCloak);cloak.position.y=0.85;
-    const torso=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.55,0.30),M.asnCloak);torso.position.y=1.30;
-    const shL=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.28,0.22),M.asnCloak);shL.position.set(-0.30,1.45,0);shL.rotation.z=-0.35;
-    const shR=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.28,0.22),M.asnCloak);shR.position.set(0.30,1.45,0);shR.rotation.z=0.35;
-    const hood=new THREE.Mesh(new THREE.ConeGeometry(0.30,0.55,6),M.asnHood);hood.position.y=1.92;
-    const face=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.28,0.18),M.asnFace);face.position.set(0,1.66,0.09);
-    const eg=new THREE.BoxGeometry(0.07,0.05,0.015);
-    const eL=new THREE.Mesh(eg,M.asnEye);eL.position.set(-0.07,1.72,0.19);
-    const eR=new THREE.Mesh(eg,M.asnEye);eR.position.set(0.07,1.72,0.19);
-    const mouth=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.035,0.012),M.asnMouth);mouth.position.set(0,1.58,0.19);
-    const cg=new THREE.BoxGeometry(0.03,0.36,0.03);
-    const cL1=new THREE.Mesh(cg,M.asnClaw);cL1.position.set(-0.42,0.85,0.04);cL1.rotation.set(0.15,0,0.25);
-    const cL2=new THREE.Mesh(cg,M.asnClaw);cL2.position.set(-0.38,0.85,0.12);cL2.rotation.set(0.15,0,0.30);
-    const cL3=new THREE.Mesh(cg,M.asnClaw);cL3.position.set(-0.46,0.85,-0.04);cL3.rotation.set(0.15,0,0.20);
-    const cR1=new THREE.Mesh(cg,M.asnClaw);cR1.position.set(0.42,0.85,0.04);cR1.rotation.set(0.15,0,-0.25);
-    const cR2=new THREE.Mesh(cg,M.asnClaw);cR2.position.set(0.38,0.85,0.12);cR2.rotation.set(0.15,0,-0.30);
-    const cR3=new THREE.Mesh(cg,M.asnClaw);cR3.position.set(0.46,0.85,-0.04);cR3.rotation.set(0.15,0,-0.20);
-    this.mesh.add(cloak,torso,shL,shR,hood,face,eL,eR,mouth,cL1,cL2,cL3,cR1,cR2,cR3);
+    const cloak=new THREE.Mesh(new THREE.ConeGeometry(0.52,1.85,8),M.asnCloak);cloak.position.y=0.92;
+    const torso=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.60,0.34),M.asnCloak);torso.position.y=1.40;
+    const shL=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.34,0.26),M.asnCloak);shL.position.set(-0.34,1.58,0);shL.rotation.z=-0.30;
+    const shR=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.34,0.26),M.asnCloak);shR.position.set(0.34,1.58,0);shR.rotation.z=0.30;
+    const hoodBack=new THREE.Mesh(new THREE.ConeGeometry(0.34,0.62,8),M.asnHood);hoodBack.position.set(0,2.02,-0.05);
+    const hoodSideL=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.42,0.34),M.asnHood);hoodSideL.position.set(-0.22,1.82,0.04);hoodSideL.rotation.z=0.20;
+    const hoodSideR=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.42,0.34),M.asnHood);hoodSideR.position.set(0.22,1.82,0.04);hoodSideR.rotation.z=-0.20;
+    const skull=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.36,0.28),M.asnFace);skull.position.set(0,1.78,0.10);
+    const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.22),M.asnFace);jaw.position.set(0,1.58,0.12);
+    const socketL=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.10,0.02),M.asnSocket);socketL.position.set(-0.08,1.84,0.24);
+    const socketR=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.10,0.02),M.asnSocket);socketR.position.set(0.08,1.84,0.24);
+    const eg=new THREE.BoxGeometry(0.045,0.045,0.012);
+    const eL=new THREE.Mesh(eg,M.asnEye);eL.position.set(-0.08,1.84,0.255);
+    const eR=new THREE.Mesh(eg,M.asnEye);eR.position.set(0.08,1.84,0.255);
+    const nose=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.08,0.02),M.asnSocket);nose.position.set(0,1.74,0.245);
+    const mouth=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.05,0.012),M.asnMouth);mouth.position.set(0,1.60,0.235);
+    const tg=new THREE.BoxGeometry(0.03,0.07,0.012);
+    for(let i=0;i<5;i++){
+      const tU=new THREE.Mesh(tg,M.asnFace);tU.position.set(-0.07+i*0.035,1.635,0.243);this.mesh&&this.mesh.add(tU);
+    }
+    const blood=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.18,0.012),M.asnBlood);blood.position.set(0.02,1.46,0.18);blood.rotation.z=0.15;
+    const cg=new THREE.BoxGeometry(0.035,0.42,0.035);
+    const cL1=new THREE.Mesh(cg,M.asnClaw);cL1.position.set(-0.48,0.78,0.06);cL1.rotation.set(0.2,0,0.30);
+    const cL2=new THREE.Mesh(cg,M.asnClaw);cL2.position.set(-0.42,0.78,0.16);cL2.rotation.set(0.2,0,0.35);
+    const cL3=new THREE.Mesh(cg,M.asnClaw);cL3.position.set(-0.52,0.78,-0.04);cL3.rotation.set(0.2,0,0.25);
+    const cR1=new THREE.Mesh(cg,M.asnClaw);cR1.position.set(0.48,0.78,0.06);cR1.rotation.set(0.2,0,-0.30);
+    const cR2=new THREE.Mesh(cg,M.asnClaw);cR2.position.set(0.42,0.78,0.16);cR2.rotation.set(0.2,0,-0.35);
+    const cR3=new THREE.Mesh(cg,M.asnClaw);cR3.position.set(0.52,0.78,-0.04);cR3.rotation.set(0.2,0,-0.25);
+    this.mesh.add(cloak,torso,shL,shR,hoodBack,hoodSideL,hoodSideR,skull,jaw,socketL,socketR,eL,eR,nose,mouth,blood,cL1,cL2,cL3,cR1,cR2,cR3);
     this.mesh.position.copy(this.pos);scene.add(this.mesh);
   }
   dtp(){return Math.hypot(playerPos.x-this.pos.x,playerPos.z-this.pos.z);}
@@ -736,26 +750,18 @@ function switchFloor(){
   assassins.forEach(a=>scene.remove(a.mesh));assassins.length=0;
   golems.forEach(g=>scene.remove(g.mesh));golems.length=0;
   buildLevel();buildCompanion();
-  // Find the destination stair closest to where the player switched from,
-  // then drop them onto a clearly-open tile next to it (not on a stair).
-  let nearestS=null,bd=Infinity;
-  const map=activeMap();
-  for(let r=0;r<map.length;r++)for(let c=0;c<map[r].length;c++){
-    if(map[r][c]==='S'){
-      const d=Math.hypot(c+0.5-playerPos.x,r+0.5-playerPos.z);
-      if(d<bd){bd=d;nearestS={c,r};}
-    }
-  }
-  if(nearestS){
-    const dirs=[[0,1],[-1,1],[1,1],[-1,0],[1,0],[0,-1],[-1,-1],[1,-1]];
-    for(const [dc,dr] of dirs){
-      const nc=nearestS.c+dc,nr=nearestS.r+dr;
-      if(tileAt(nc,nr)==='.'&&!wallAt(nc+0.5,nr+0.5)){
-        playerPos.x=nc+0.5;playerPos.z=nr+0.5;break;
-      }
-    }
-  }
-  comp.x=playerPos.x;comp.z=playerPos.z+0.8;
+  // Hardcoded landing spots well inside the open main hall on each side
+  // of the level, so the player never spawns wedged against walls or
+  // stuck on top of a stair tile.
+  const LANDINGS={
+    0:[{x:17.5,z:8.5},{x:17.5,z:18.5}],   // basement hall north/south
+    1:[{x:17.5,z:7.5},{x:17.5,z:25.5}]    // floor 1 lobby / hall
+  };
+  const opts=LANDINGS[currentFloor];
+  let pick=opts[0],bd=Infinity;
+  for(const o of opts){const d=Math.hypot(o.x-playerPos.x,o.z-playerPos.z);if(d<bd){bd=d;pick=o;}}
+  playerPos.x=pick.x;playerPos.z=pick.z;
+  comp.x=pick.x;comp.z=pick.z+0.8;
   document.getElementById('floor-msg').textContent=msg;
   document.getElementById('floor-msg').classList.add('active');
   floorMsgTimer=1.5;floorTransitCD=4.0;
@@ -766,7 +772,8 @@ function genSchedule(n){return[{at:0,count:2+Math.floor(n/2)},{at:20,count:1+Mat
 function spawnAssassins(n){for(let i=0;i<n;i++){let sx,sz,att=0;do{sx=2+Math.random()*(COLS-4);sz=ROWS-3+Math.random()*1.5;att++;}while(wallPt(sx,sz)&&att<20);assassins.push(new Assassin(sx,sz));}}
 
 function applyLighting(){
-  if(currentFloor===0){ambLight.color.setHex(0xa89878);ambLight.intensity=5.0;playerLight.color.setHex(0xfff1c8);playerLight.intensity=4.5;playerLight.distance=30;scene.fog.color.setHex(0x4a3a28);scene.fog.density=0.003;return;}
+  if(currentFloor===0){ambLight.color.setHex(0xc8b898);ambLight.intensity=5.5;playerLight.color.setHex(0xfff1c8);playerLight.intensity=4.0;playerLight.distance=30;hemiLight.intensity=3.5;scene.fog.color.setHex(0x4a3a28);scene.fog.density=0.002;return;}
+  hemiLight.intensity=0;
   if(phase==='day'){ambLight.color.setHex(0xaa9978);ambLight.intensity=2.2;playerLight.color.setHex(0xffddaa);playerLight.intensity=1.0;playerLight.distance=18;scene.fog.color.setHex(0x5a4a30);scene.fog.density=0.010;}
   else if(phase==='night'){ambLight.color.setHex(0x7080a8);ambLight.intensity=1.9;playerLight.color.setHex(0xffd0aa);playerLight.intensity=1.4;playerLight.distance=18;scene.fog.color.setHex(0x1a2238);scene.fog.density=0.012;}
   else{ambLight.color.setHex(0xa0907a);ambLight.intensity=2.0;playerLight.color.setHex(0xffc899);playerLight.intensity=1.2;playerLight.distance=18;scene.fog.color.setHex(0x3a2a18);scene.fog.density=0.011;}
