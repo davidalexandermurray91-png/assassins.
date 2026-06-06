@@ -408,7 +408,7 @@ const COLS = 35, ROWS = 30;
 let currentFloor = 1;
 function activeMap() { return currentFloor === 1 ? MAP_F1 : MAP_B1; }
 
-const WALL_H=2.8, EYE_H=1.55, PLAYER_R=0.28, DAY_DUR=60, NIGHT_DUR=90, DAWN_DUR=4;
+const WALL_H=2.8, EYE_H=1.55, PLAYER_R=0.22, DAY_DUR=60, NIGHT_DUR=90, DAWN_DUR=4;
 const GUN_COST=50, SWORD_COST=30, DETECT_R=7, SWORD_R=1.6, ENEMY_ATK_R=1.1;
 const SPEED=4.5, MOUSE_SENS=0.0022, HIDE_DIST=2.0, WORK_DIST=2.5, SHOP_DIST=2.0, LOGIN_SHOW=1.6;
 
@@ -510,7 +510,12 @@ const M={
   cmpHead:new THREE.MeshLambertMaterial({color:0x0099bb}),
   asnBody:new THREE.MeshLambertMaterial({color:0xaa1100}),
   asnHead:new THREE.MeshLambertMaterial({color:0x882200}),
-  asnEye:new THREE.MeshBasicMaterial({color:0xff4444}),
+  asnEye:new THREE.MeshBasicMaterial({color:0xff2222}),
+  asnCloak:new THREE.MeshLambertMaterial({color:0x0a0306}),
+  asnHood:new THREE.MeshLambertMaterial({color:0x070103}),
+  asnFace:new THREE.MeshLambertMaterial({color:0x382828}),
+  asnClaw:new THREE.MeshLambertMaterial({color:0x8a8a8a}),
+  asnMouth:new THREE.MeshBasicMaterial({color:0x550000}),
   arm:new THREE.MeshLambertMaterial({color:0xc8824a}),
   blade:new THREE.MeshLambertMaterial({color:0xcccccc}),
   hilt:new THREE.MeshLambertMaterial({color:0x886600}),
@@ -595,8 +600,9 @@ function buildLevel() {
     }
   });
   // Accent lights
-  const lp=currentFloor===1?[[4,2],[12,2],[20,2],[4,10],[12,10],[20,10],[4,18],[12,18],[20,18],[17,25]]:[[8,3],[8,12],[8,22],[26,12],[26,22],[17,7],[17,17]];
-  lp.forEach(p=>{const l=new THREE.PointLight(0xffddaa,0.9,10);l.position.set(p[0],WALL_H*0.85,p[1]);addLvl(l);});
+  const lp=currentFloor===1?[[4,2],[12,2],[20,2],[4,10],[12,10],[20,10],[4,18],[12,18],[20,18],[17,25]]:[[8,3],[8,12],[8,22],[26,3],[26,12],[26,22],[17,7],[17,17],[4,7],[30,7],[17,25]];
+  const lInt=currentFloor===0?1.6:0.9, lRng=currentFloor===0?14:10;
+  lp.forEach(p=>{const l=new THREE.PointLight(0xffddaa,lInt,lRng);l.position.set(p[0],WALL_H*0.85,p[1]);addLvl(l);});
 }
 
 let vmSword,vmGun;
@@ -640,7 +646,34 @@ function updateCompanion(dt){
 
 const assassins=[];
 class Assassin{
-  constructor(x,z){this.pos=new THREE.Vector3(x,0,z);this.hp=5;this.maxHp=5;this.alive=true;this.state='patrol';this.stunT=0;this.atkCD=0;this.pAngle=Math.random()*Math.PI*2;this.pTimer=1+Math.random()*2;this.spd=2.0+Math.random()*0.5;this.distracted=false;this.mesh=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(0.42,1.25,0.32),M.asnBody);body.position.y=0.625;const head=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.34,0.34),M.asnHead);head.position.y=1.38;const eg=new THREE.BoxGeometry(0.07,0.055,0.01);const eL=new THREE.Mesh(eg,M.asnEye);eL.position.set(-0.09,1.40,0.17);const eR=new THREE.Mesh(eg,M.asnEye);eR.position.set(0.09,1.40,0.17);this.mesh.add(body,head,eL,eR);this.mesh.position.copy(this.pos);scene.add(this.mesh);}
+  constructor(x,z){
+    this.pos=new THREE.Vector3(x,0,z);
+    this.hp=8;this.maxHp=8;
+    this.alive=true;this.state='patrol';this.stunT=0;this.atkCD=0;
+    this.pAngle=Math.random()*Math.PI*2;this.pTimer=1+Math.random()*2;
+    this.spd=2.4+Math.random()*0.6;
+    this.distracted=false;
+    this.mesh=new THREE.Group();
+    const cloak=new THREE.Mesh(new THREE.ConeGeometry(0.46,1.75,7),M.asnCloak);cloak.position.y=0.85;
+    const torso=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.55,0.30),M.asnCloak);torso.position.y=1.30;
+    const shL=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.28,0.22),M.asnCloak);shL.position.set(-0.30,1.45,0);shL.rotation.z=-0.35;
+    const shR=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.28,0.22),M.asnCloak);shR.position.set(0.30,1.45,0);shR.rotation.z=0.35;
+    const hood=new THREE.Mesh(new THREE.ConeGeometry(0.30,0.55,6),M.asnHood);hood.position.y=1.92;
+    const face=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.28,0.18),M.asnFace);face.position.set(0,1.66,0.09);
+    const eg=new THREE.BoxGeometry(0.07,0.05,0.015);
+    const eL=new THREE.Mesh(eg,M.asnEye);eL.position.set(-0.07,1.72,0.19);
+    const eR=new THREE.Mesh(eg,M.asnEye);eR.position.set(0.07,1.72,0.19);
+    const mouth=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.035,0.012),M.asnMouth);mouth.position.set(0,1.58,0.19);
+    const cg=new THREE.BoxGeometry(0.03,0.36,0.03);
+    const cL1=new THREE.Mesh(cg,M.asnClaw);cL1.position.set(-0.42,0.85,0.04);cL1.rotation.set(0.15,0,0.25);
+    const cL2=new THREE.Mesh(cg,M.asnClaw);cL2.position.set(-0.38,0.85,0.12);cL2.rotation.set(0.15,0,0.30);
+    const cL3=new THREE.Mesh(cg,M.asnClaw);cL3.position.set(-0.46,0.85,-0.04);cL3.rotation.set(0.15,0,0.20);
+    const cR1=new THREE.Mesh(cg,M.asnClaw);cR1.position.set(0.42,0.85,0.04);cR1.rotation.set(0.15,0,-0.25);
+    const cR2=new THREE.Mesh(cg,M.asnClaw);cR2.position.set(0.38,0.85,0.12);cR2.rotation.set(0.15,0,-0.30);
+    const cR3=new THREE.Mesh(cg,M.asnClaw);cR3.position.set(0.46,0.85,-0.04);cR3.rotation.set(0.15,0,-0.20);
+    this.mesh.add(cloak,torso,shL,shR,hood,face,eL,eR,mouth,cL1,cL2,cL3,cR1,cR2,cR3);
+    this.mesh.position.copy(this.pos);scene.add(this.mesh);
+  }
   dtp(){return Math.hypot(playerPos.x-this.pos.x,playerPos.z-this.pos.z);}
   moveTo(tx,tz,spd,dt){const dx=tx-this.pos.x,dz=tz-this.pos.z,d=Math.hypot(dx,dz);if(d<0.08)return;const s=spd*dt,r=0.22,nx=dx/d*s,nz=dz/d*s;if(!isWall(Math.floor(this.pos.x+nx+r*Math.sign(dx)),Math.floor(this.pos.z)))this.pos.x+=nx;if(!isWall(Math.floor(this.pos.x),Math.floor(this.pos.z+nz+r*Math.sign(dz))))this.pos.z+=nz;if(d>0.15)this.mesh.rotation.y=Math.atan2(tx-this.pos.x,tz-this.pos.z);}
   patrol(dt){this.state='patrol';this.pTimer-=dt;if(this.pTimer<=0){this.pAngle=Math.random()*Math.PI*2;this.pTimer=1.5+Math.random()*2.5;}this.moveTo(this.pos.x+Math.sin(this.pAngle),this.pos.z+Math.cos(this.pAngle),1.2,dt);}
@@ -703,9 +736,20 @@ function switchFloor(){
   assassins.forEach(a=>scene.remove(a.mesh));assassins.length=0;
   golems.forEach(g=>scene.remove(g.mesh));golems.length=0;
   buildLevel();buildCompanion();
+  // Nudge player onto a safe open tile next to the stairs so they don't
+  // re-trigger the staircase or get wedged against the narrow corridor walls.
+  const pc=Math.floor(playerPos.x),pr=Math.floor(playerPos.z);
+  const candidates=[];
+  for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++){
+    const nc=pc+dc,nr=pr+dr,t=tileAt(nc,nr);
+    if(t==='.'&&!wallAt(nc+0.5,nr+0.5))candidates.push({x:nc+0.5,z:nr+0.5,d:Math.abs(dc)+Math.abs(dr)});
+  }
+  candidates.sort((a,b)=>a.d-b.d);
+  if(candidates.length){playerPos.x=candidates[0].x;playerPos.z=candidates[0].z;}
+  comp.x=playerPos.x;comp.z=playerPos.z+0.8;
   document.getElementById('floor-msg').textContent=msg;
   document.getElementById('floor-msg').classList.add('active');
-  floorMsgTimer=1.5;floorTransitCD=1.0;
+  floorMsgTimer=1.5;floorTransitCD=2.5;
   applyLighting();
 }
 
@@ -713,7 +757,7 @@ function genSchedule(n){return[{at:0,count:2+Math.floor(n/2)},{at:20,count:1+Mat
 function spawnAssassins(n){for(let i=0;i<n;i++){let sx,sz,att=0;do{sx=2+Math.random()*(COLS-4);sz=ROWS-3+Math.random()*1.5;att++;}while(wallPt(sx,sz)&&att<20);assassins.push(new Assassin(sx,sz));}}
 
 function applyLighting(){
-  if(currentFloor===0){ambLight.color.setHex(0x303030);ambLight.intensity=1.0;playerLight.color.setHex(0xffddaa);playerLight.intensity=2.0;playerLight.distance=12;scene.fog.color.setHex(0x0a0a0a);scene.fog.density=0.04;return;}
+  if(currentFloor===0){ambLight.color.setHex(0x554a3a);ambLight.intensity=2.2;playerLight.color.setHex(0xffeec0);playerLight.intensity=3.4;playerLight.distance=22;scene.fog.color.setHex(0x141414);scene.fog.density=0.018;return;}
   if(phase==='day'){ambLight.color.setHex(0xaa9978);ambLight.intensity=2.2;playerLight.color.setHex(0xffddaa);playerLight.intensity=1.0;playerLight.distance=18;scene.fog.color.setHex(0x5a4a30);scene.fog.density=0.010;}
   else if(phase==='night'){ambLight.color.setHex(0x7080a8);ambLight.intensity=1.9;playerLight.color.setHex(0xffd0aa);playerLight.intensity=1.4;playerLight.distance=18;scene.fog.color.setHex(0x1a2238);scene.fog.density=0.012;}
   else{ambLight.color.setHex(0xa0907a);ambLight.intensity=2.0;playerLight.color.setHex(0xffc899);playerLight.intensity=1.2;playerLight.distance=18;scene.fog.color.setHex(0x3a2a18);scene.fog.density=0.011;}
