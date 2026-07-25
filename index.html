@@ -51,6 +51,46 @@
       touch-action: manipulation;
     }
     .acct-btn:hover { background: #16242f; border-color: #66aadd; color: #bbddff; }
+    #mp-panel {
+      width: 460px; max-width: 92vw; margin: 4px 0 10px;
+      background: rgba(4,10,16,0.92); border: 1px solid #1e3a4a;
+      padding: 10px 12px; text-align: center;
+    }
+    .mp-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+    .mp-btn {
+      flex: 1 1 auto; padding: 9px 10px; cursor: pointer;
+      font-family: 'Courier New', monospace; font-size: 13px; font-weight: bold;
+      border: 1px solid #2a5a72; background: #0d1c26; color: #7fd4ff;
+      touch-action: manipulation;
+    }
+    .mp-btn:hover { background: #122b3a; color: #bfeaff; }
+    .mp-host { border-color: #2a6a4a; color: #7fffbb; }
+    .mp-host:hover { background: #0d2418; }
+    #mp-code-in {
+      width: 84px; text-align: center; text-transform: uppercase;
+      background: #050d12; border: 1px solid #2a5a72; color: #fff;
+      font-family: 'Courier New', monospace; font-size: 15px; letter-spacing: 3px;
+      padding: 8px 4px; outline: none;
+    }
+    #mp-code-in:focus { border-color: #7fd4ff; }
+    #mp-code-wrap { margin-top: 9px; font-size: 12px; color: #888; }
+    #mp-code {
+      font-size: 26px; font-weight: bold; letter-spacing: 8px; color: #7fffbb;
+      text-shadow: 0 0 16px #00ff8855; display: block; margin: 2px 0 3px;
+    }
+    .mp-hint { font-size: 11px; color: #4a5a66; }
+    #mp-status { font-size: 11px; color: #ffcc66; min-height: 15px; margin-top: 6px; }
+    .mp-leave {
+      background: none; border: none; color: #55606a; cursor: pointer;
+      font-family: 'Courier New', monospace; font-size: 11px;
+      text-decoration: underline; margin-top: 4px; touch-action: manipulation;
+    }
+    .mp-leave:hover { color: #ff8888; }
+    #hb-room {
+      position: absolute; top: 66px; right: 8px; font-size: 11px;
+      color: #7fd4ff; background: rgba(0,0,0,0.6); padding: 3px 8px;
+      border: 1px solid #234; white-space: nowrap;
+    }
     #title-user { font-size: 12px; color: #44cc88; margin-bottom: 4px; min-height: 18px; }
     #title-hint { font-size: 11px; color: #333; }
     #login-screen h2 { font-size: 38px; color: #cc0000; text-shadow: 0 0 20px #cc0000; margin-bottom: 6px; }
@@ -291,6 +331,19 @@
     </div>
     <div id="title-user"></div>
     <button class="start-btn" id="start-btn">&#9654;&nbsp; START</button>
+    <div id="mp-panel">
+      <div class="mp-row">
+        <button class="mp-btn mp-host" id="mp-host-btn">&#127968;&nbsp; HOST CO-OP</button>
+        <input id="mp-code-in" maxlength="4" placeholder="CODE" spellcheck="false" autocomplete="off">
+        <button class="mp-btn mp-join" id="mp-join-btn">&#128101;&nbsp; JOIN</button>
+      </div>
+      <div id="mp-code-wrap" style="display:none">
+        Your room code: <span id="mp-code">----</span>
+        <div class="mp-hint">Friends type this into the CODE box, then you press START.</div>
+      </div>
+      <div id="mp-status"></div>
+      <button class="mp-leave" id="mp-leave-btn">Leave co-op</button>
+    </div>
     <button class="acct-btn" id="account-btn">&#128100;&nbsp; ACCOUNT / LOGIN &nbsp;(ESC)</button>
     <div id="title-hint">Click START or press ENTER &middot; ESC = account</div>
   </div>
@@ -317,6 +370,7 @@
     <div id="hb-hiding" style="display:none"></div>
     <div id="hb-ride" style="display:none"></div>
     <div id="run-warn" style="display:none">!! RUNNING - Assassins alerted!</div>
+    <div id="hb-room" style="display:none"></div>
   </div>
   <div id="wardrobe-peek"><div class="wp-top"></div><div class="wp-slit"></div><div class="wp-bot"></div></div>
   <div id="bed-dim"></div>
@@ -367,6 +421,7 @@
   </div>
 </div>
 <script src="three.min.js"></script>
+<script src="peerjs.min.js"></script>
 <script>
 // ASSASSINS - Grand Hotel Survival (First-Person 3D)
 // Tiles: W=wall .=floor D=doorway B=bed C=wardrobe S=staircase
@@ -933,6 +988,30 @@ function damagePlayer(n){
   playerInvincible=0.6;
   snd.hit(); hitFlashT=0.2;
 }
+// A "target" is anything a hostile mob can hunt: the local player, plus every
+// remote player when we are hosting a co-op game. Mob AI must never reach for
+// playerPos directly or co-op assassins would all ignore the guests.
+function nearestTarget(x,z){
+  let bx=0,bz=0,bid=null,brun=false,bd=Infinity,found=false;
+  if(!isHiding){
+    const d=Math.hypot(playerPos.x-x,playerPos.z-z);
+    if(d<bd){ bd=d; bx=playerPos.x; bz=playerPos.z; bid=null; brun=playerRunning; found=true; }
+  }
+  if(NET.active&&NET.isHost){
+    for(const id in NET.players){
+      const p=NET.players[id];
+      if(p.floor!==currentFloor||p.hiding||p.dead) continue;
+      const d=Math.hypot(p.x-x,p.z-z);
+      if(d<bd){ bd=d; bx=p.x; bz=p.z; bid=id; brun=!!p.running; found=true; }
+    }
+  }
+  return found?{x:bx,z:bz,id:bid,d:bd,running:brun}:null;
+}
+// Route damage to whichever player the mob actually reached.
+function hurtTarget(t,n){
+  if(t.id===null) damagePlayer(n);
+  else netSendTo(t.id,'dmg',{n:n});
+}
 // Everything friendly to the player: golems + tamed semi-players.
 // Reuses one buffer because this is called by every assassin every frame; the
 // result is only valid until the next call, so callers that need to keep it
@@ -954,6 +1033,7 @@ class Assassin{
     this.pAngle=Math.random()*Math.PI*2; this.pTimer=1+Math.random()*2;
     this.spd=2.9+Math.random()*0.7;
     this.distracted=false; this.mounted=false; this.buckT=0;
+    this.nid=++NET_NID;
     this.mesh=new THREE.Mesh(ASN_GEO,M.mob);
     this.mesh.position.copy(this.pos);
     scene.add(this.mesh);
@@ -992,22 +1072,20 @@ class Assassin{
       this.strikeAllies();
       this.sync(); return;
     }
-    const distPl=this.dtp();
-    const detR=playerRunning?DETECT_R*1.8:DETECT_R;
     this.distracted=false;
-    let tx=playerPos.x, tz=playerPos.z;
-    if(isHiding&&companionDistract){
-      const dc=Math.hypot(comp.x-this.pos.x,comp.z-this.pos.z);
-      if(dc<9){ this.distracted=true; tx=comp.x; tz=comp.z; }
+    const near=nearestTarget(this.pos.x,this.pos.z);
+    if(!near){
+      // every player is hidden - go for the companion decoy, else patrol
+      if(companionDistract&&Math.hypot(comp.x-this.pos.x,comp.z-this.pos.z)<9){
+        this.distracted=true; this.moveTo(comp.x,comp.z,this.spd,dt);
+      } else this.patrol(dt);
+      this.strikeAllies(); this.sync(); return;
     }
-    if(isHiding&&!this.distracted){
-      this.patrol(dt);
-    } else if(distPl<detR||this.state==='chase'){
+    const detR=near.running?DETECT_R*1.8:DETECT_R;
+    if(near.d<detR||this.state==='chase'){
       this.state='chase';
-      if(distPl>0.6) this.moveTo(tx,tz,this.spd*(playerRunning?1.45:1),dt);
-      if(!this.distracted&&distPl<ENEMY_ATK_R&&this.atkCD<=0){
-        this.atkCD=1.1; damagePlayer(1);
-      }
+      if(near.d>0.6) this.moveTo(near.x,near.z,this.spd*(near.running?1.45:1),dt);
+      if(near.d<ENEMY_ATK_R&&this.atkCD<=0){ this.atkCD=1.1; hurtTarget(near,1); }
     } else {
       this.patrol(dt);
     }
@@ -1031,6 +1109,7 @@ class Golem{
     this.pos=new THREE.Vector3(x,0,z);
     this.hp=24; this.maxHp=24; this.alive=true;
     this.spd=2.2; this.atkCD=0; this.greenSpawned=false;
+    this.nid=++NET_NID;
     this.mesh=new THREE.Mesh(PLG_GEO,M.mob);
     this.mesh.position.copy(this.pos);
     scene.add(this.mesh);
@@ -1099,6 +1178,7 @@ class SemiPlayer{
     this.hp=12; this.maxHp=12; this.alive=true;
     this.tamed=!!tamed; this.spd=3.2; this.atkCD=0; this.stunT=0;
     this.pAngle=Math.random()*Math.PI*2; this.pTimer=1+Math.random()*2;
+    this.nid=++NET_NID;
     this.mesh=new THREE.Mesh(this.tamed?SEMI_TAME_GEO:SEMI_WILD_GEO,M.mob);
     this.mesh.position.copy(this.pos);
     scene.add(this.mesh);
@@ -1127,13 +1207,15 @@ class SemiPlayer{
       const d=Math.hypot(a.pos.x-this.pos.x,a.pos.z-this.pos.z);
       if(d<bd){ bd=d; target=a; targetIsPlayer=false; }
     }
+    let pTgt=null;
     if(!this.tamed){
-      const dp=Math.hypot(playerPos.x-this.pos.x,playerPos.z-this.pos.z);
-      if(dp<DETECT_R*1.5 && dp<bd){ bd=dp; target=null; targetIsPlayer=true; }
+      pTgt=nearestTarget(this.pos.x,this.pos.z);
+      if(pTgt&&pTgt.d<DETECT_R*1.5&&pTgt.d<bd){ bd=pTgt.d; target=null; targetIsPlayer=true; }
+      else pTgt=null;
     }
-    if(targetIsPlayer){
-      if(bd>1.0) this.moveTo(playerPos.x,playerPos.z,this.spd,dt);
-      if(bd<1.4&&this.atkCD<=0){ this.atkCD=1.3; damagePlayer(1); }
+    if(targetIsPlayer&&pTgt){
+      if(bd>1.0) this.moveTo(pTgt.x,pTgt.z,this.spd,dt);
+      if(bd<1.4&&this.atkCD<=0){ this.atkCD=1.3; hurtTarget(pTgt,1); }
     } else if(target){
       if(bd>1.0) this.moveTo(target.pos.x,target.pos.z,this.spd,dt);
       if(bd<1.4&&this.atkCD<=0){ this.atkCD=1.3; target.hurt(2); }
@@ -1206,6 +1288,305 @@ const snd={
   tickFast:()=>{_beep(1200,.05,'sine',.25,0);_beep(900,.07,'sine',.2,.05);}
 };
 ['click','touchstart','keydown'].forEach(t=>document.addEventListener(t,()=>getAC(),{once:true,capture:true}));
+
+// =========================================================== CO-OP NETCODE --
+// Peer-to-peer (WebRTC via PeerJS), host-authoritative star topology.
+// The player who hosts owns the truth: assassins, semi-players, PLGs, the
+// day/night clock and which floor the party is on. Guests simulate only their
+// own movement and render everything else from the host's snapshots.
+let NET_NID=0;
+const NET_TICK=1/15;        // snapshot + input rate
+const NET_LERP=14;          // remote position smoothing
+const ROOM_ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no look-alike glyphs
+const NET={
+  active:false, isHost:false, peer:null, conns:[], hostConn:null,
+  room:'', myName:'', myId:'me', players:{}, mobs:{a:{},s:{},g:{}},
+  acc:0, status:'', connected:false,
+};
+function netRoomCode(){
+  let c=''; for(let i=0;i<4;i++) c+=ROOM_ALPHA[Math.floor(Math.random()*ROOM_ALPHA.length)];
+  return c;
+}
+function netPeerId(code){ return 'assassins-hotel-'+code; }
+function netSay(msg){ NET.status=msg; const e=el('mp-status'); if(e) e.textContent=msg; }
+function netSend(conn,t,d){ try{ if(conn&&conn.open) conn.send({t:t,d:d}); }catch(e){} }
+function netBroadcast(t,d){ for(let i=0;i<NET.conns.length;i++) netSend(NET.conns[i],t,d); }
+function netSendTo(id,t,d){
+  for(let i=0;i<NET.conns.length;i++) if(NET.conns[i].peer===id) return netSend(NET.conns[i],t,d);
+}
+function netSendHost(t,d){ netSend(NET.hostConn,t,d); }
+const r2=n=>Math.round(n*100)/100;
+
+// ---- remote player avatars ------------------------------------------------
+const REMOTE_COLORS=[0x33bbff,0xffaa33,0x44ff88,0xff55cc,0xffee55,0xaa88ff];
+function nameSprite(name,color){
+  const cv=document.createElement('canvas'); cv.width=256; cv.height=64;
+  const g=cv.getContext('2d');
+  g.fillStyle='rgba(0,0,0,0.55)'; g.fillRect(0,0,256,64);
+  g.font='bold 34px monospace'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillStyle='#'+color.toString(16).padStart(6,'0');
+  g.fillText((name||'player').slice(0,14),128,34);
+  const tex=new THREE.CanvasTexture(cv);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
+  sp.scale.set(1.6,0.4,1); sp.position.y=2.15;
+  return sp;
+}
+function netAvatar(id,name,idx){
+  const color=REMOTE_COLORS[idx%REMOTE_COLORS.length];
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(buildHumanGeo(color,0xe8b98c,0xffffff),M.mob);
+  g.add(body,nameSprite(name,color));
+  scene.add(g);
+  return g;
+}
+function netEnsurePlayer(id,name){
+  let p=NET.players[id];
+  if(!p){
+    p=NET.players[id]={x:SPAWN.x,z:SPAWN.z,yaw:0,floor:1,hiding:false,running:false,
+                       dead:false,name:name||'player',tx:SPAWN.x,tz:SPAWN.z,
+                       idx:Object.keys(NET.players).length};
+    p.mesh=netAvatar(id,p.name,p.idx);
+  }
+  return p;
+}
+function netDropPlayer(id){
+  const p=NET.players[id];
+  if(p){ if(p.mesh) scene.remove(p.mesh); delete NET.players[id]; }
+}
+function netClearPlayers(){ for(const id in NET.players) netDropPlayer(id); }
+
+// ---- guest-side mob proxies ----------------------------------------------
+// Lightweight stand-ins so every existing system (sword arcs, gun raycasts,
+// riding, HUD prompts) keeps working on a guest without running any AI.
+class RemoteMob{
+  constructor(kind,nid,x,z,geo){
+    this.kind=kind; this.nid=nid; this.alive=true;
+    this.pos=new THREE.Vector3(x,0,z);
+    this.tx=x; this.tz=z; this.mounted=false; this.hp=1; this.tamed=false;
+    this.mesh=new THREE.Mesh(geo,M.mob);
+    this.mesh.position.set(x,0,z);
+    scene.add(this.mesh);
+  }
+  sync(){ this.mesh.position.set(this.pos.x,0,this.pos.z); }
+  update(){}
+  hurt(){}                                    // the host decides who dies
+  hit(d){ netSendHost('hit',{k:this.kind,id:this.nid,d:d}); }
+  kill(){ this.alive=false; scene.remove(this.mesh); }
+}
+function netMobList(kind){ return kind==='a'?assassins:kind==='s'?semis:golems; }
+function netMobGeo(kind,tamed){
+  return kind==='a'?ASN_GEO:kind==='g'?PLG_GEO:(tamed?SEMI_TAME_GEO:SEMI_WILD_GEO);
+}
+// Reconcile one mob category against the host's snapshot.
+function netApplyMobs(kind,rows){
+  const list=netMobList(kind), seen=NET.mobs[kind], live={};
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i], nid=r[0];
+    let m=seen[nid];
+    if(!m){
+      m=new RemoteMob(kind,nid,r[1],r[2],netMobGeo(kind,r[4]===1));
+      seen[nid]=m; list.push(m);
+    }
+    m.tx=r[1]; m.tz=r[2];
+    m.mesh.rotation.y=r[3];
+    if(kind==='a'){ m.hp=r[4]; m.mounted=r[5]===1; }
+    if(kind==='s'){
+      const t=r[4]===1;
+      if(t!==m.tamed){ m.tamed=t; m.mesh.geometry=netMobGeo('s',t); }
+    }
+    live[nid]=1;
+  }
+  for(const nid in seen){
+    if(live[nid]) continue;
+    const m=seen[nid];
+    m.kill(); delete seen[nid];
+    const i=list.indexOf(m); if(i>=0) list.splice(i,1);
+  }
+}
+function netClearMobs(){
+  ['a','s','g'].forEach(k=>{
+    const seen=NET.mobs[k], list=netMobList(k);
+    for(const nid in seen){ const m=seen[nid]; m.kill(); const i=list.indexOf(m); if(i>=0) list.splice(i,1); }
+    NET.mobs[k]={};
+  });
+}
+
+// ---- snapshots ------------------------------------------------------------
+function netBuildSnapshot(){
+  const a=[],s=[],g=[];
+  for(let i=0;i<assassins.length;i++){ const m=assassins[i]; if(m.alive)
+    a.push([m.nid,r2(m.pos.x),r2(m.pos.z),r2(m.mesh.rotation.y),m.hp,m.mounted?1:0]); }
+  for(let i=0;i<semis.length;i++){ const m=semis[i]; if(m.alive)
+    s.push([m.nid,r2(m.pos.x),r2(m.pos.z),r2(m.mesh.rotation.y),m.tamed?1:0]); }
+  for(let i=0;i<golems.length;i++){ const m=golems[i]; if(m.alive)
+    g.push([m.nid,r2(m.pos.x),r2(m.pos.z),r2(m.mesh.rotation.y)]); }
+  const p=[[NET.myId,r2(playerPos.x),r2(playerPos.z),r2(yaw),currentFloor,NET.myName,isHiding?1:0]];
+  for(const id in NET.players){
+    const q=NET.players[id];
+    p.push([id,r2(q.x),r2(q.z),r2(q.yaw),q.floor,q.name,q.hiding?1:0]);
+  }
+  return {ph:phase,pt:r2(phaseTime),fl:currentFloor,ns:nightsSurvived,a:a,s:s,g:g,p:p};
+}
+function netApplySnapshot(d){
+  const floorChanged=(d.fl!==currentFloor);
+  if(floorChanged){
+    // the party moves together: follow the host's floor
+    currentFloor=d.fl;
+    netClearMobs();
+    buildLevel(); buildCompanion(); applyLighting();
+    const land=findOpenTile(playerPos.x,playerPos.z,true);
+    playerPos.x=land.x; playerPos.z=land.z; playerY=0; playerVY=0;
+    if(mountedOn) dismount(false);
+    el('floor-msg').textContent=currentFloor===0?'Going downstairs...':'Going upstairs...';
+    el('floor-msg').classList.add('active'); floorMsgTimer=1.5;
+  }
+  const phaseChanged=(d.ph!==phase);
+  phase=d.ph; phaseTime=d.pt; nightsSurvived=d.ns;
+  if(phaseChanged){
+    applyLighting();
+    if(phase==='night'){ nightWarningTimer=5; snd.night(); }
+    if(phase==='dawn'){ snd.dawn(); el('dawn-msg').textContent='Night '+nightsSurvived+' survived!'; }
+    el('dawn-ov').classList.toggle('active',phase==='dawn');
+  }
+  netApplyMobs('a',d.a); netApplyMobs('s',d.s); netApplyMobs('g',d.g);
+  const live={};
+  for(let i=0;i<d.p.length;i++){
+    const r=d.p[i];
+    if(r[0]===NET.myId) continue;
+    const q=netEnsurePlayer(r[0],r[5]);
+    q.tx=r[1]; q.tz=r[2]; q.yaw=r[3]; q.floor=r[4]; q.name=r[5]; q.hiding=r[6]===1;
+    live[r[0]]=1;
+  }
+  for(const id in NET.players) if(!live[id]) netDropPlayer(id);
+}
+
+// ---- per-frame pump -------------------------------------------------------
+function netInterpolate(dt){
+  const k=Math.min(1,NET_LERP*dt);
+  for(const id in NET.players){
+    const p=NET.players[id];
+    p.x+=(p.tx-p.x)*k; p.z+=(p.tz-p.z)*k;
+    if(p.mesh){
+      p.mesh.position.set(p.x,0,p.z);
+      p.mesh.rotation.y=p.yaw;
+      p.mesh.visible=(p.floor===currentFloor)&&!p.hiding;
+    }
+  }
+  if(NET.active&&!NET.isHost){
+    for(const k2 of ['a','s','g']){
+      const seen=NET.mobs[k2];
+      for(const nid in seen){
+        const m=seen[nid];
+        m.pos.x+=(m.tx-m.pos.x)*k; m.pos.z+=(m.tz-m.pos.z)*k;
+        m.sync();
+      }
+    }
+  }
+}
+function netPump(dt){
+  if(!NET.active) return;
+  NET.acc+=dt;
+  if(NET.acc<NET_TICK) return;
+  NET.acc=0;
+  if(NET.isHost) netBroadcast('snap',netBuildSnapshot());
+  else netSendHost('in',{x:r2(playerPos.x),z:r2(playerPos.z),y:r2(yaw),
+                         f:currentFloor,h:isHiding?1:0,r:playerRunning?1:0,
+                         d:gameState==='lose'?1:0,n:NET.myName});
+}
+
+// ---- message handling -----------------------------------------------------
+function netOnHostMessage(conn,m){        // host receives from a guest
+  if(!m||!m.t) return;
+  const p=netEnsurePlayer(conn.peer,m.d&&m.d.n);
+  if(m.t==='in'){
+    p.tx=m.d.x; p.tz=m.d.z; p.x=m.d.x; p.z=m.d.z; p.yaw=m.d.y;
+    p.floor=m.d.f; p.hiding=m.d.h===1; p.running=m.d.r===1;
+    p.dead=m.d.d===1; if(m.d.n) p.name=m.d.n;
+  } else if(m.t==='hit'){
+    const list=netMobList(m.d.k);
+    for(let i=0;i<list.length;i++) if(list[i].nid===m.d.id&&list[i].alive){ list[i].hurt(m.d.d); break; }
+  } else if(m.t==='tame'){
+    for(let i=0;i<semis.length;i++) if(semis[i].nid===m.d.id&&semis[i].alive&&semis[i].tame){ semis[i].tame(); break; }
+  } else if(m.t==='stairs'){
+    if(floorTransitCD<=0) switchFloor();
+  } else if(m.t==='mount'){
+    for(let i=0;i<assassins.length;i++) if(assassins[i].nid===m.d.id&&assassins[i].alive){
+      assassins[i].mounted=m.d.on===1; break; }
+  }
+}
+function netOnGuestMessage(m){            // guest receives from the host
+  if(!m||!m.t) return;
+  if(m.t==='snap') netApplySnapshot(m.d);
+  else if(m.t==='dmg') damagePlayer(m.d.n);
+  else if(m.t==='bye') netLeave('The host ended the game.');
+}
+function netWireConn(conn,asHost){
+  conn.on('open',()=>{
+    NET.connected=true;
+    if(asHost){
+      NET.conns.push(conn);
+      netEnsurePlayer(conn.peer,'player');
+      netSay(NET.conns.length+' friend'+(NET.conns.length===1?'':'s')+' connected');
+    } else {
+      NET.hostConn=conn;
+      netSay('Connected! Starting...');
+      netSendHost('in',{x:r2(playerPos.x),z:r2(playerPos.z),y:0,f:1,h:0,r:0,d:0,n:NET.myName});
+      if(gameState!=='playing') initGame(!!currentUser);
+    }
+  });
+  conn.on('data',d=>{ if(asHost) netOnHostMessage(conn,d); else netOnGuestMessage(d); });
+  conn.on('close',()=>{
+    if(asHost){
+      const i=NET.conns.indexOf(conn); if(i>=0) NET.conns.splice(i,1);
+      netDropPlayer(conn.peer);
+      netSay(NET.conns.length+' friend'+(NET.conns.length===1?'':'s')+' connected');
+    } else netLeave('Lost connection to the host.');
+  });
+  conn.on('error',()=>{});
+}
+function netHost(){
+  if(typeof Peer==='undefined'){ netSay('Multiplayer library failed to load.'); return; }
+  netLeave(null,true);
+  NET.room=netRoomCode(); NET.isHost=true; NET.active=true; NET.myId='host';
+  NET.myName=currentUser||'host';
+  netSay('Opening room...');
+  NET.peer=new Peer(netPeerId(NET.room));
+  NET.peer.on('open',()=>{
+    netSay('Room open. Give your friends the code, then press START.');
+    el('mp-code').textContent=NET.room;
+    el('mp-code-wrap').style.display='block';
+  });
+  NET.peer.on('connection',c=>netWireConn(c,true));
+  NET.peer.on('error',e=>{
+    if(e&&e.type==='unavailable-id'){ NET.room=netRoomCode(); netSay('Code taken, retrying...'); netHost(); }
+    else netSay('Could not open a room. Check your connection.');
+  });
+}
+function netJoin(code){
+  if(typeof Peer==='undefined'){ netSay('Multiplayer library failed to load.'); return; }
+  code=(code||'').trim().toUpperCase();
+  if(code.length!==4){ netSay('Room codes are 4 characters.'); return; }
+  netLeave(null,true);
+  NET.room=code; NET.isHost=false; NET.active=true; NET.myId='guest';
+  NET.myName=currentUser||'guest';
+  netSay('Connecting to '+code+'...');
+  NET.peer=new Peer();
+  NET.peer.on('open',()=>{
+    const c=NET.peer.connect(netPeerId(code),{reliable:false});
+    netWireConn(c,false);
+    setTimeout(()=>{ if(!NET.connected) netSay('No answer from '+code+'. Is the host still hosting?'); },9000);
+  });
+  NET.peer.on('error',()=>netSay('Could not reach room '+code+'.'));
+}
+function netLeave(msg,quiet){
+  if(NET.isHost&&NET.conns.length) netBroadcast('bye',{});
+  try{ if(NET.peer) NET.peer.destroy(); }catch(e){}
+  netClearPlayers(); netClearMobs();
+  NET.peer=null; NET.conns=[]; NET.hostConn=null;
+  NET.active=false; NET.isHost=false; NET.connected=false; NET.room='';
+  const w=el('mp-code-wrap'); if(w) w.style.display='none';
+  if(!quiet) netSay(msg||'Left the game.');
+}
 
 // --------------------------------------------------------------- ACCOUNTS --
 const savedAccounts=JSON.parse(localStorage.getItem('asnAccounts')||'{}');
@@ -1389,11 +1770,15 @@ function exitHiding(){
 
 function mount(a){
   mountedOn=a; a.mounted=true; a.buckT=0;
+  if(NET.active&&!NET.isHost) netSendHost('mount',{id:a.nid,on:1});
   mountT=MOUNT_MAX_T; playerVY=0; playerY=MOUNT_EYE;
   a.hurt(3); snd.mount();
 }
 function dismount(hop){
-  if(mountedOn){ mountedOn.mounted=false; }
+  if(mountedOn){
+    mountedOn.mounted=false;
+    if(NET.active&&!NET.isHost) netSendHost('mount',{id:mountedOn.nid,on:0});
+  }
   mountedOn=null; mountT=0;
   // Reset the height before hopping off. Leaving playerY at MOUNT_EYE meant the
   // pop-off arc peaked above the ceiling AND put us straight back into the
@@ -1439,7 +1824,7 @@ function initGame(keepProgress){
   const safe=findOpenTile(playerPos.x,playerPos.z,true);
   playerPos.x=safe.x; playerPos.z=safe.z;
   // Bring an account's PLGs and tamed Semi-Players back with them.
-  if(keepProgress&&pendingAllies){
+  if(keepProgress&&pendingAllies&&!(NET.active&&!NET.isHost)){
     for(let i=0;i<(pendingAllies.g||0);i++) spawnGolemBeside(safe.x,safe.z);
     for(let i=0;i<(pendingAllies.s||0);i++) spawnTamedSemiBeside(safe.x,safe.z);
   }
@@ -1519,7 +1904,9 @@ function doAttack(){
 }
 
 // ----------------------------------------------------------------- PHASES --
-function updatePhase(dt){
+// Timers that are purely local presentation - guests run these even though
+// the host owns the actual day/night clock.
+function updateLocalTimers(dt){
   if(nightWarningTimer>0) nightWarningTimer-=dt;
   if(runWarningTimer>0) runWarningTimer-=dt;
   if(hideCooldown>0) hideCooldown-=dt;
@@ -1527,6 +1914,9 @@ function updatePhase(dt){
   if(floorMsgTimer>0){ floorMsgTimer-=dt; if(floorMsgTimer<=0) el('floor-msg').classList.remove('active'); }
   if(floorTransitCD>0) floorTransitCD-=dt;
   el('night-warn-ov').classList.toggle('active',nightWarningTimer>0);
+}
+function updatePhase(dt){
+  updateLocalTimers(dt);
   if(phase==='dawn'){
     dawnTimer-=dt;
     if(dawnTimer<=0){
@@ -1643,7 +2033,11 @@ function updatePlayer(dt){
     // ---- staircase --------------------------------------------------------
     if(floorTransitCD<=0&&playerY<=0.05){
       const pc=Math.floor(playerPos.x),pr=Math.floor(playerPos.z);
-      if(tileAt(pc,pr)==='S') switchFloor();
+      if(tileAt(pc,pr)==='S'){
+        // in co-op the party travels together, so a guest asks the host
+        if(NET.active&&!NET.isHost){ netSendHost('stairs',{}); floorTransitCD=4.0; }
+        else switchFloor();
+      }
     }
   }
 
@@ -1658,7 +2052,10 @@ function updatePlayer(dt){
     let used=false;
     if(hasPurple){
       for(const s of semis){
-        if(s.alive&&!s.tamed&&dist2(s.pos,here)<TAME_DIST){ s.tame(); used=true; break; }
+        if(s.alive&&!s.tamed&&dist2(s.pos,here)<TAME_DIST){
+          if(s.tame) s.tame(); else netSendHost('tame',{id:s.nid});
+          used=true; break;
+        }
       }
     }
     if(!used&&currentFloor===1&&dist2(DOCTOR,here)<USE_DIST&&DOCTOR.cooldown<=0&&playerHP<HP_MAX){
@@ -1716,6 +2113,12 @@ function updateHUD(){
   if(vmGun) vmGun.visible=hasGun&&!mountedOn;
   el('hb-user').textContent=currentUser||'';
   el('run-warn').style.display=runWarningTimer>0?'block':'none';
+  const roomEl=el('hb-room');
+  if(NET.active){
+    const n=1+(NET.isHost?NET.conns.length:Object.keys(NET.players).length);
+    roomEl.style.display='block';
+    roomEl.textContent=(NET.isHost?'HOSTING ':'IN ROOM ')+NET.room+'  -  '+n+' player'+(n===1?'':'s');
+  } else roomEl.style.display='none';
   const hideEl=el('hb-hiding');
   if(isHiding){
     const hl=hideSpotRef&&hideSpotRef.type==='bed'?'HIDING UNDER BED':'HIDING IN WARDROBE';
@@ -1774,6 +2177,16 @@ function updateHUD(){
 function update(dt){
   if(gameState!=='playing') return;
   if(hitFlashT>0) hitFlashT-=dt;
+  netPump(dt);
+  // A guest simulates only itself; mobs and the clock arrive from the host.
+  if(NET.active&&!NET.isHost){
+    updateLocalTimers(dt);
+    updatePlayer(dt); if(gameState!=='playing') return;
+    updateCompanion(dt);
+    netInterpolate(dt);
+    updateHUD();
+    return;
+  }
   updatePhase(dt); if(phase==='dawn') return;
   updatePlayer(dt); if(gameState!=='playing') return;
   updateCompanion(dt);
@@ -1783,6 +2196,7 @@ function update(dt){
   for(let i=semis.length-1;i>=0;i--) if(!semis[i].alive) semis.splice(i,1);
   golems.forEach(g=>g.update(dt));
   for(let i=golems.length-1;i>=0;i--) if(!golems[i].alive) golems.splice(i,1);
+  netInterpolate(dt);
   updateHUD();
 }
 
@@ -1883,6 +2297,10 @@ function gameLoop(ts){
   el('start-btn').addEventListener('click',()=>initGame(!!currentUser));
   el('retry-btn').addEventListener('click',()=>initGame(!!currentUser));
   el('account-btn').addEventListener('click',openLogin);
+  el('mp-host-btn').addEventListener('click',netHost);
+  el('mp-join-btn').addEventListener('click',()=>netJoin(el('mp-code-in').value));
+  el('mp-leave-btn').addEventListener('click',()=>netLeave('Left co-op. You are solo again.'));
+  el('mp-code-in').addEventListener('keydown',e=>{ if(e.key==='Enter') netJoin(el('mp-code-in').value); });
   el('lose-account-btn').addEventListener('click',openLogin);
   el('login-back').addEventListener('click',()=>{ gameState='title'; showScreen('title'); refreshTitle(); });
   el('l-submit').addEventListener('click',doLogin);
