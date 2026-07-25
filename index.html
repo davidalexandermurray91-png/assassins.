@@ -448,7 +448,11 @@ const WORK_DIST=2.5, SHOP_DIST=2.4, USE_DIST=2.6, TAME_DIST=2.8;
 const LOGIN_SHOW=1.6;
 const HP_BASE=5, HP_MAX=10;
 const DOC_CD=25;
-const GRAVITY=-20, JUMP_V=6.6, MOUNT_MAX_T=8, MOUNT_R=1.2, MOUNT_EYE=1.5;
+// MOUNT_EYE must keep the camera under WALL_H or you see over every wall:
+// EYE_H + MOUNT_EYE = 1.55 + 0.95 = 2.50, comfortably below the 2.8 ceiling
+// and still above the assassin's ~2.46 hood.
+const GRAVITY=-20, JUMP_V=6.6, MOUNT_MAX_T=8, MOUNT_R=1.2, MOUNT_EYE=0.95;
+const MOUNT_CD=0.8;   // lockout after dismount, else you instantly re-mount
 
 const SWORD_SHOP ={x:39.5,z:69.5};
 const GUN_SHOP   ={x:43.5,z:69.5};
@@ -525,12 +529,28 @@ function findOpenTile(x,z,avoidStairs){
 
 // ------------------------------------------------------------------ INPUT --
 const keys={},kDown={};
+// Drop every latched key. Called on any screen/state change and whenever the
+// window loses focus or the pointer unlocks, so a key that was down at the
+// moment of a transition can never stay stuck and walk the player around by
+// itself - or fire a queued action on the first frame of the next screen.
+function clearInput(){ for(const k in keys) delete keys[k]; for(const k in kDown) delete kDown[k]; }
+function isTypingTarget(t){ return !!t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable); }
 document.addEventListener('keydown',e=>{
+  // While a login field has focus the form owns the keyboard: we neither
+  // preventDefault (so Space and the arrow keys still work while typing a
+  // username or password) nor latch anything for the game. ESC still gets
+  // through so it can back out of the form.
+  if(isTypingTarget(e.target)){
+    if(e.code==='Escape'){ if(!keys[e.code])kDown[e.code]=true; keys[e.code]=true; }
+    return;
+  }
   if(!keys[e.code]) kDown[e.code]=true;
   keys[e.code]=true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
 });
 document.addEventListener('keyup',e=>{ keys[e.code]=false; });
+window.addEventListener('blur',clearInput);
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) clearInput(); });
 function pressed(c){ const v=kDown[c]; delete kDown[c]; return !!v; }
 function held(c){ return !!keys[c]; }
 
@@ -539,7 +559,11 @@ let wardrobePeekActive=false,hideSpotRef=null,savedPitch=0;
 
 const canvas=el('c');
 canvas.addEventListener('click',()=>{ if(gameState!=='playing')return; if(!isLocked)canvas.requestPointerLock(); else clickFired=true; });
-document.addEventListener('pointerlockchange',()=>{ isLocked=document.pointerLockElement===canvas; refreshLockPrompt(); });
+document.addEventListener('pointerlockchange',()=>{
+  isLocked=document.pointerLockElement===canvas;
+  if(!isLocked) clearInput();   // keys held when the mouse frees can't stay down
+  refreshLockPrompt();
+});
 document.addEventListener('mousemove',e=>{
   if(!isLocked||gameState!=='playing')return;
   yaw-=e.movementX*MOUSE_SENS;
@@ -765,10 +789,25 @@ const STAIR_GEO=buildStairGeo();
 const SHOP_SWORD_GEO=buildShopGeo(0x8a6000,0xffcc33);
 const SHOP_GUN_GEO  =buildShopGeo(0x0d4a0d,0x44ee44);
 const SHOP_PURP_GEO =buildShopGeo(0x4a1a70,0xcc66ff);
+// These are baked once and reused by every mob/prop instance, so clearLevel()
+// must never dispose them - only the per-build floor/ceiling/wall geometry.
+[ASN_GEO,PLG_GEO,SEMI_WILD_GEO,SEMI_TAME_GEO,DOC_GEO,WKR_GEO,CMP_GEO,
+ WARD_GEO,BED_GEO,STAIR_GEO,SHOP_SWORD_GEO,SHOP_GUN_GEO,SHOP_PURP_GEO]
+  .forEach(g=>{ if(g&&g.userData) g.userData.shared=true; });
 
 // ----------------------------------------------------------- BUILD LEVEL --
 let levelMeshes=[];
-function clearLevel(){ levelMeshes.forEach(o=>scene.remove(o)); levelMeshes.length=0; }
+function clearLevel(){
+  levelMeshes.forEach(o=>{
+    scene.remove(o);
+    // InstancedMesh.dispose() releases the per-instance matrix buffer
+    if(o.isInstancedMesh&&o.dispose) o.dispose();
+    const g=o.geometry;
+    // floor/lobby/ceiling planes and the wall boxes are rebuilt every time
+    if(g&&g.dispose&&!(g.userData&&g.userData.shared)) g.dispose();
+  });
+  levelMeshes.length=0;
+}
 function addLvl(o){ scene.add(o); levelMeshes.push(o); }
 function instanceAt(geo,spots,yRot){
   if(!spots.length) return;
@@ -1184,7 +1223,7 @@ let spawnSchedule=[],lastCountdownSec=-1,nightElapsed=0,lastFrameTime=0;
 const playerPos=new THREE.Vector3(SPAWN.x,EYE_H,SPAWN.z);
 let playerHP=HP_BASE,playerInvincible=0,playerRunning=false;
 let attackCD=0,swingT=0,hitFlashT=0;
-let playerY=0,playerVY=0,mountedOn=null,mountT=0;
+let playerY=0,playerVY=0,mountedOn=null,mountT=0,remountCD=0;
 
 function teleportAlliesNear(x,z){
   // snapshot: allies() reuses one buffer, so we must not re-enter it mid-loop
@@ -1306,7 +1345,12 @@ function mount(a){
 function dismount(hop){
   if(mountedOn){ mountedOn.mounted=false; }
   mountedOn=null; mountT=0;
-  if(hop){ playerVY=4.2; } else { playerVY=0; playerY=0; }
+  // Reset the height before hopping off. Leaving playerY at MOUNT_EYE meant the
+  // pop-off arc peaked above the ceiling AND put us straight back into the
+  // "descending near an assassin" test, so riding re-armed itself forever.
+  if(hop){ playerY=Math.min(playerY,0.6); playerVY=4.2; }
+  else { playerVY=0; playerY=0; }
+  remountCD=MOUNT_CD;
   if(wallAt(playerPos.x,playerPos.z)){
     const p=findOpenTile(playerPos.x,playerPos.z,true);
     playerPos.x=p.x; playerPos.z=p.z;
@@ -1324,6 +1368,7 @@ function clearNightMobs(keepAllies){
 }
 
 function initGame(keepProgress){
+  clearInput();
   phase='day'; phaseTime=DAY_DUR; currentFloor=1;
   if(!keepProgress){ money=0; hasSword=false; hasGun=false; hasPurple=false; nightsSurvived=0; }
   nightWarningTimer=0; runWarningTimer=0;
@@ -1333,8 +1378,8 @@ function initGame(keepProgress){
   nightElapsed=0; dawnTimer=0; lastCountdownSec=-1;
   playerPos.set(SPAWN.x,EYE_H,SPAWN.z);
   playerHP=HP_BASE; playerInvincible=0; playerRunning=false;
-  playerY=0; playerVY=0; mountedOn=null; mountT=0;
-  attackCD=0; swingT=0; hitFlashT=0; yaw=Math.PI; pitch=0;
+  playerY=0; playerVY=0; mountedOn=null; mountT=0; remountCD=0;
+  attackCD=0; swingT=0; hitFlashT=0; yaw=Math.PI; pitch=0; clickFired=false;
   comp.x=SPAWN.x; comp.z=SPAWN.z+1; comp.state='follow';
   DOCTOR.cooldown=0;
   WORKERS.forEach(w=>{ w.cooldown=0; w.flash=0; });
@@ -1354,6 +1399,7 @@ function initGame(keepProgress){
 }
 
 function showScreen(name){
+  clearInput();
   document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
   el('hud').classList.remove('active');
   el('xhair').classList.remove('active');
@@ -1475,6 +1521,7 @@ function updatePlayer(dt){
   if(playerInvincible>0) playerInvincible-=dt;
   if(attackCD>0) attackCD-=dt;
   if(swingT>0) swingT-=dt;
+  if(remountCD>0) remountCD-=dt;
   if(playerHP<=0){
     playerHP=0; gameState='lose'; snd.death();
     el('lose-nights').textContent='Nights survived: '+nightsSurvived;
@@ -1530,7 +1577,7 @@ function updatePlayer(dt){
     const moved=moveXZ(playerPos.x,playerPos.z,wx*spd*dt,wz*spd*dt);
     playerPos.x=moved.x; playerPos.z=moved.z;
     // ---- land on an assassin ----------------------------------------------
-    if(playerY>0.30&&playerVY<0){
+    if(playerY>0.30&&playerY<1.6&&playerVY<0&&remountCD<=0){
       for(const a of assassins){
         if(!a.alive||a.mounted) continue;
         if(Math.hypot(a.pos.x-playerPos.x,a.pos.z-playerPos.z)<MOUNT_R){ mount(a); break; }
@@ -1688,7 +1735,8 @@ function render(){
     camera.rotation.set(0,yaw,0,'YXZ');
   } else {
     playerPos.y=EYE_H;
-    camera.position.set(playerPos.x,EYE_H+playerY,playerPos.z);
+    // hard cap: the camera must never rise above the walls/ceiling
+    camera.position.set(playerPos.x,Math.min(EYE_H+playerY,WALL_H-0.15),playerPos.z);
     camera.rotation.set(pitch,yaw,0,'YXZ');
   }
   playerLight.position.set(playerPos.x,EYE_H+playerY,playerPos.z);
