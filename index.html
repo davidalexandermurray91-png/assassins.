@@ -282,6 +282,8 @@
       <p>Jobs pay $10. Sword $30, Gun $50, Purple Cloak $45. The Doctor gives +1 life every 25s.</p>
       <h3>&#9790; Night &mdash; Click/ATK: attack &nbsp; SPACE: jump &nbsp; H: hide</h3>
       <p>Jump onto an assassin to ride it &mdash; it cannot hit you while you're on its back.</p>
+      <h3>&#128100; Accounts &mdash; press ESC</h3>
+      <p>Log in and death only costs $10: you keep your gear, your nights, and your PLGs and tamed Semi-Players. Guests lose everything.</p>
       <h3>&#128123; Mobs</h3>
       <p>Assassins hunt you. PLGs defend you. Semi-Players attack everyone &mdash; own the Purple Cloak and press E to tame one.</p>
       <h3>Controls</h3>
@@ -361,6 +363,7 @@
     <h3>Semi-Players</h3><p>Purple half-players. Untamed, they attack assassins AND you. Buy the Purple Cloak, then press E next to one to tame it. Tamed ones fight for you and stay with you through the day.</p>
     <h3>Floors</h3><p>Walk onto stairs (S) to switch between Floor 1 and the Basement.</p>
     <h3>Account</h3><p>Press ESC (or the ACCOUNT button) on the title screen to log in or create an account. Progress saves automatically.</p>
+    <h3>Dying on an account</h3><p>You only lose $10. Your sword, gun, Purple Cloak, nights survived, and every PLG and tamed Semi-Player come back with you on the next run. Play as a guest and death wipes everything.</p>
   </div>
 </div>
 <script src="three.min.js"></script>
@@ -447,6 +450,7 @@ const HIDE_DIST=2.0, HIDE_DUR=8, HIDE_CD=10;
 const WORK_DIST=2.5, SHOP_DIST=2.4, USE_DIST=2.6, TAME_DIST=2.8;
 const LOGIN_SHOW=1.6;
 const HP_BASE=5, HP_MAX=10;
+const DEATH_COST=10;   // logged-in players only lose this much when killed
 const DOC_CD=25;
 // MOUNT_EYE must keep the camera under WALL_H or you see over every wall:
 // EYE_H + MOUNT_EYE = 1.55 + 0.95 = 2.50, comfortably below the 2.8 ceiling
@@ -1149,6 +1153,16 @@ class SemiPlayer{
     if(this.hp<=0){ this.hp=0; this.alive=false; scene.remove(this.mesh); snd.enemyDie(); }
   }
 }
+function spawnTamedSemiBeside(x,z){
+  if(semis.length>=SEMI_MAX) return;
+  for(let i=0;i<10;i++){
+    const a=Math.random()*Math.PI*2, r=1.2+Math.random()*1.4;
+    const nx=x+Math.cos(a)*r, nz=z+Math.sin(a)*r;
+    if(!wallPt(nx,nz)){ semis.push(new SemiPlayer(nx,nz,true)); return; }
+  }
+  const p=findOpenTile(x,z,true);
+  semis.push(new SemiPlayer(p.x,p.z,true));
+}
 function spawnSemis(n){
   for(let i=0;i<n;i++){
     if(semis.length>=SEMI_MAX) return;
@@ -1200,9 +1214,17 @@ function hashPassword(pw){
   const d=new TextEncoder().encode(pw);
   return crypto.subtle.digest('SHA-256',d).then(b=>Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''));
 }
+// How many friendly mobs are currently with the player. Persisted so an
+// account keeps its PLGs and tamed Semi-Players across deaths and sessions.
+function allyRoster(){
+  return {
+    g:golems.filter(x=>x.alive).length,
+    s:semis.filter(x=>x.alive&&x.tamed).length
+  };
+}
 function saveProgress(){
   if(!currentUser||!savedAccounts[currentUser]) return;
-  savedAccounts[currentUser].save={money,hasSword,hasGun,hasPurple,nightsSurvived};
+  savedAccounts[currentUser].save={money,hasSword,hasGun,hasPurple,nightsSurvived,allies:allyRoster()};
   localStorage.setItem('asnAccounts',JSON.stringify(savedAccounts));
 }
 function loadProgress(){
@@ -1210,6 +1232,7 @@ function loadProgress(){
   const s=savedAccounts[currentUser].save;
   money=s.money||0; hasSword=!!s.hasSword; hasGun=!!s.hasGun;
   hasPurple=!!s.hasPurple; nightsSurvived=s.nightsSurvived||0;
+  pendingAllies=s.allies||null;
 }
 
 // ------------------------------------------------------------ GAME STATE --
@@ -1224,6 +1247,33 @@ const playerPos=new THREE.Vector3(SPAWN.x,EYE_H,SPAWN.z);
 let playerHP=HP_BASE,playerInvincible=0,playerRunning=false;
 let attackCD=0,swingT=0,hitFlashT=0;
 let playerY=0,playerVY=0,mountedOn=null,mountT=0,remountCD=0;
+// Ally roster carried through death / reload for logged-in players.
+let pendingAllies=null;
+
+// Dying on an ACCOUNT is a setback, not a wipe: you keep your gear, your
+// nights and your allies, and only pay DEATH_COST. Guests still lose it all,
+// which is the whole reason to make an account.
+function onPlayerDeath(){
+  if(currentUser){
+    money=Math.max(0,money-DEATH_COST);
+    pendingAllies=allyRoster();
+    saveProgress();
+    el('lose-nights').innerHTML=
+      'Nights survived: '+nightsSurvived+
+      '<br><span style="color:#ff8888">-$'+DEATH_COST+'</span>'+
+      '<span style="color:#666"> (that is all you lose)</span>'+
+      '<br><span style="color:#66ff99">'+pendingAllies.g+' PLG'+(pendingAllies.g===1?'':'s')+
+      ' and '+pendingAllies.s+' tamed Semi-Player'+(pendingAllies.s===1?'':'s')+
+      ' are waiting for you</span>';
+  } else {
+    pendingAllies=null;
+    el('lose-nights').innerHTML=
+      'Nights survived: '+nightsSurvived+
+      '<br><span style="color:#ff8888">Playing as a guest - all progress lost.</span>'+
+      '<br><span style="color:#88bbdd">Make an account and death only costs $'+DEATH_COST+
+      ', and your PLGs and Semi-Players stay with you.</span>';
+  }
+}
 
 function teleportAlliesNear(x,z){
   // snapshot: allies() reuses one buffer, so we must not re-enter it mid-loop
@@ -1388,6 +1438,11 @@ function initGame(keepProgress){
   buildLevel(); buildCompanion(); applyLighting();
   const safe=findOpenTile(playerPos.x,playerPos.z,true);
   playerPos.x=safe.x; playerPos.z=safe.z;
+  // Bring an account's PLGs and tamed Semi-Players back with them.
+  if(keepProgress&&pendingAllies){
+    for(let i=0;i<(pendingAllies.g||0);i++) spawnGolemBeside(safe.x,safe.z);
+    for(let i=0;i<(pendingAllies.s||0);i++) spawnTamedSemiBeside(safe.x,safe.z);
+  }
   gameState='playing'; showScreen(null);
   el('hud').classList.add('active');
   el('xhair').classList.add('active');
@@ -1524,7 +1579,7 @@ function updatePlayer(dt){
   if(remountCD>0) remountCD-=dt;
   if(playerHP<=0){
     playerHP=0; gameState='lose'; snd.death();
-    el('lose-nights').textContent='Nights survived: '+nightsSurvived;
+    onPlayerDeath();
     showScreen('lose'); if(isLocked) document.exitPointerLock();
     exitHiding(); if(mountedOn) dismount(false);
     isSleeping=false; el('sleep-ov').classList.remove('active');
@@ -1548,7 +1603,9 @@ function updatePlayer(dt){
 
   // ---- riding an assassin -------------------------------------------------
   if(mountedOn){
-    if(!mountedOn.alive){ dismount(true); }
+    // Also bail if the mount was removed from play by something other than
+    // death (dawn wipe, floor change) - otherwise we'd ride a ghost forever.
+    if(!mountedOn.alive||assassins.indexOf(mountedOn)===-1){ dismount(true); }
     else{
       mountT-=dt;
       playerPos.x=mountedOn.pos.x; playerPos.z=mountedOn.pos.z;
@@ -1805,7 +1862,7 @@ function gameLoop(ts){
   }
   if(gameState==='lose'){
     if(pressed('Escape')) openLogin();
-    else if(pressed('Enter')) initGame(false);
+    else if(pressed('Enter')) initGame(!!currentUser);
   }
   // ESC while playing: first press frees the mouse, second returns to the
   // title screen (where ESC again opens the account / login screen).
@@ -1824,7 +1881,7 @@ function gameLoop(ts){
   if(vmGun) vmGun.visible=false;
   showScreen('title'); refreshTitle();
   el('start-btn').addEventListener('click',()=>initGame(!!currentUser));
-  el('retry-btn').addEventListener('click',()=>initGame(false));
+  el('retry-btn').addEventListener('click',()=>initGame(!!currentUser));
   el('account-btn').addEventListener('click',openLogin);
   el('lose-account-btn').addEventListener('click',openLogin);
   el('login-back').addEventListener('click',()=>{ gameState='title'; showScreen('title'); refreshTitle(); });
