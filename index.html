@@ -319,7 +319,7 @@
       <h3>&#127919; Goal</h3>
       <p>Survive in a huge hotel. Earn money by day, buy gear, survive the assassins each night.</p>
       <h3>&#9728; Day &mdash; E: work / doctor / tame &nbsp; C: buy &nbsp; R: sleep</h3>
-      <p>Jobs pay $10. Sword $30, Gun $50, Purple Cloak $45. The Doctor gives +1 life every 25s.</p>
+      <p>Jobs pay $10. Sword $30, Gun $50, Purple Cloak $45, Shield $65 (+5 lives, buy as many as you can afford). The Doctor gives +1 life every 25s.</p>
       <h3>&#9790; Night &mdash; Click/ATK: attack &nbsp; SPACE: jump &nbsp; H: hide</h3>
       <p>Jump onto an assassin to ride it &mdash; it cannot hit you while you're on its back.</p>
       <h3>&#128100; Accounts &mdash; press ESC</h3>
@@ -412,6 +412,7 @@
     <h3>Riding</h3><p>SPACE to jump. Land on an assassin to ride it. While you're on its back it CANNOT hit you, and every ATK does bonus damage &mdash; even bare-handed. SPACE again to jump off.</p>
     <h3>Night</h3><p>H near a wardrobe or bed: hide 8s (10s cooldown). Shift: sprint (alerts assassins!).</p>
     <h3>Day</h3><p>E: work (+$10). C: buy Sword / Gun / Purple Cloak. R near bed: sleep (restore 1 HP).</p>
+    <h3>Shields</h3><p>$65 in the lobby for +5 lives on the spot. Unlike the sword and gun you can buy them over and over, and they stack past the Doctor's limit all the way to 20 lives.</p>
     <h3>Doctor</h3><p>Find the Doctor in the lobby. E gives +1 extra life (up to 10), then he needs 25s to prepare another.</p>
     <h3>PLGs</h3><p>Green-eyed golems that defend you. Tough but not invincible &mdash; assassins can bring them down.</p>
     <h3>Semi-Players</h3><p>Purple half-players. Untamed, they attack assassins AND you. Buy the Purple Cloak, then press E next to one to tame it. Tamed ones fight for you and stay with you through the day.</p>
@@ -498,7 +499,8 @@ function activeMap(){ return currentFloor===1?MAP_F1:MAP_B1; }
 // --------------------------------------------------------------- CONSTANTS --
 const WALL_H=2.8, EYE_H=1.55, PLAYER_R=0.22;
 const DAY_DUR=90, NIGHT_DUR=90, DAWN_DUR=4;
-const GUN_COST=50, SWORD_COST=30, PURPLE_COST=45;
+const GUN_COST=50, SWORD_COST=30, PURPLE_COST=45, SHIELD_COST=65;
+const SHIELD_LIVES=5, HP_SHIELD_MAX=20;   // shields stack past the doctor's cap
 const DETECT_R=9, SWORD_R=1.7, ENEMY_ATK_R=1.15;
 const SPEED=4.8, MOUSE_SENS=0.0022;
 const HIDE_DIST=2.0, HIDE_DUR=8, HIDE_CD=10;
@@ -516,6 +518,7 @@ const MOUNT_CD=0.8;   // lockout after dismount, else you instantly re-mount
 const SWORD_SHOP ={x:39.5,z:69.5};
 const GUN_SHOP   ={x:43.5,z:69.5};
 const PURPLE_SHOP={x:47.5,z:69.5};
+const SHIELD_SHOP={x:56.5,z:69.5};
 const DOCTOR     ={x:52.5,z:69.5,cooldown:0,mesh:null};
 const SPAWN      ={x:47.5,z:64.5};
 
@@ -848,10 +851,18 @@ const STAIR_GEO=buildStairGeo();
 const SHOP_SWORD_GEO=buildShopGeo(0x8a6000,0xffcc33);
 const SHOP_GUN_GEO  =buildShopGeo(0x0d4a0d,0x44ee44);
 const SHOP_PURP_GEO =buildShopGeo(0x4a1a70,0xcc66ff);
+const SHOP_SHIELD_GEO=mergeParts([
+  {g:BOX(1.15,0.9,0.6), y:0.45, col:0x24405e},
+  {g:BOX(1.25,0.1,0.7), y:0.95, col:0x8fd0ff, flat:true},
+  {g:BOX(0.42,0.46,0.06), y:0.56,z:-0.32, col:0xcfe6ff},
+  {g:CONE(0.30,0.34,3), y:0.24,z:-0.33,rx:Math.PI, col:0xcfe6ff},
+  {g:BOX(0.09,0.30,0.02), y:0.58,z:-0.36, col:0x2a6ea8, flat:true},
+  {g:BOX(0.26,0.09,0.02), y:0.62,z:-0.36, col:0x2a6ea8, flat:true},
+]);
 // These are baked once and reused by every mob/prop instance, so clearLevel()
 // must never dispose them - only the per-build floor/ceiling/wall geometry.
 [ASN_GEO,PLG_GEO,SEMI_WILD_GEO,SEMI_TAME_GEO,DOC_GEO,WKR_GEO,CMP_GEO,
- WARD_GEO,BED_GEO,STAIR_GEO,SHOP_SWORD_GEO,SHOP_GUN_GEO,SHOP_PURP_GEO]
+ WARD_GEO,BED_GEO,STAIR_GEO,SHOP_SWORD_GEO,SHOP_GUN_GEO,SHOP_PURP_GEO,SHOP_SHIELD_GEO]
   .forEach(g=>{ if(g&&g.userData) g.userData.shared=true; });
 
 // ----------------------------------------------------------- BUILD LEVEL --
@@ -914,6 +925,7 @@ function buildLevel(){
     const sm=new THREE.Mesh(SHOP_SWORD_GEO,M.prop); sm.position.set(SWORD_SHOP.x,0,SWORD_SHOP.z); addLvl(sm);
     const gm=new THREE.Mesh(SHOP_GUN_GEO,M.prop);   gm.position.set(GUN_SHOP.x,0,GUN_SHOP.z);     addLvl(gm);
     const pm=new THREE.Mesh(SHOP_PURP_GEO,M.prop);  pm.position.set(PURPLE_SHOP.x,0,PURPLE_SHOP.z);addLvl(pm);
+    const hm=new THREE.Mesh(SHOP_SHIELD_GEO,M.prop);hm.position.set(SHIELD_SHOP.x,0,SHIELD_SHOP.z);addLvl(hm);
     const dm=new THREE.Mesh(DOC_GEO,M.mob); dm.position.set(DOCTOR.x,0,DOCTOR.z); dm.rotation.y=Math.PI; addLvl(dm); DOCTOR.mesh=dm;
   } else DOCTOR.mesh=null;
   WORKERS.forEach(w=>{
@@ -2074,6 +2086,11 @@ function updatePlayer(dt){
     if(dist2(SWORD_SHOP,here)<SHOP_DIST&&!hasSword&&money>=SWORD_COST){ hasSword=true; money-=SWORD_COST; snd.buy(); }
     if(dist2(GUN_SHOP,here)<SHOP_DIST&&!hasGun&&money>=GUN_COST){ hasGun=true; money-=GUN_COST; snd.buy(); }
     if(dist2(PURPLE_SHOP,here)<SHOP_DIST&&!hasPurple&&money>=PURPLE_COST){ hasPurple=true; money-=PURPLE_COST; snd.buy(); }
+    // Shields are a consumable: buy as many as you can afford.
+    if(dist2(SHIELD_SHOP,here)<SHOP_DIST&&money>=SHIELD_COST&&playerHP<HP_SHIELD_MAX){
+      playerHP=Math.min(playerHP+SHIELD_LIVES,HP_SHIELD_MAX);
+      money-=SHIELD_COST; snd.buy();
+    }
   }
 
   // ---- H: hide ------------------------------------------------------------
@@ -2106,7 +2123,8 @@ function updateHUD(){
     '<span style="color:#ffd700">$'+money+'</span><br>'+
     '<span style="color:'+(hasSword?'#66ff66':'#ff5555')+';font-size:11px">Swd '+(hasSword?'OK':'$'+SWORD_COST)+'</span> '+
     '<span style="color:'+(hasGun?'#66ff66':'#ff5555')+';font-size:11px">Gun '+(hasGun?'OK':'$'+GUN_COST)+'</span> '+
-    '<span style="color:'+(hasPurple?'#cc66ff':'#ff5555')+';font-size:11px">Purple '+(hasPurple?'OK':'$'+PURPLE_COST)+'</span><br>'+
+    '<span style="color:'+(hasPurple?'#cc66ff':'#ff5555')+';font-size:11px">Purple '+(hasPurple?'OK':'$'+PURPLE_COST)+'</span> '+
+    '<span style="color:'+(money>=SHIELD_COST?'#8fd0ff':'#ff5555')+';font-size:11px">Shield $'+SHIELD_COST+'</span><br>'+
     '<span style="color:#555;font-size:11px">Nights: '+nightsSurvived+' &middot; PLG '+golems.length+' &middot; Semi '+tamedCount+'</span>';
   el('hb-weapon').textContent=hasGun?'GUN':hasSword?'SWORD':'unarmed';
   if(vmSword) vmSword.visible=hasSword&&!hasGun&&!mountedOn;
@@ -2148,6 +2166,11 @@ function updateHUD(){
       if(!prompt&&dist2(SWORD_SHOP,here)<SHOP_DIST) prompt=hasSword?'Sword: OWNED':'[C] Buy Sword $'+SWORD_COST;
       if(!prompt&&dist2(GUN_SHOP,here)<SHOP_DIST) prompt=hasGun?'Gun: OWNED':'[C] Buy Gun $'+GUN_COST;
       if(!prompt&&dist2(PURPLE_SHOP,here)<SHOP_DIST) prompt=hasPurple?'Purple Cloak: OWNED (E to tame Semi-Players)':'[C] Buy Purple Cloak $'+PURPLE_COST;
+      if(!prompt&&dist2(SHIELD_SHOP,here)<SHOP_DIST){
+        if(playerHP>=HP_SHIELD_MAX) prompt='Shield: lives already full ('+HP_SHIELD_MAX+')';
+        else if(money<SHIELD_COST) prompt='Shield $'+SHIELD_COST+' (+'+SHIELD_LIVES+' lives) - need $'+(SHIELD_COST-money)+' more';
+        else prompt='[C] Buy Shield $'+SHIELD_COST+' (+'+SHIELD_LIVES+' lives)';
+      }
     }
     if(!prompt&&phase==='night'){
       for(const s of ALL_HIDE) if(dist2(s,here)<HIDE_DIST+0.5){
