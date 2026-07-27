@@ -322,6 +322,8 @@
       <p>Jobs pay $10. Sword $30, Gun $50, Purple Cloak $45, Shield $65 (+5 lives, buy as many as you can afford). The Doctor gives +1 life every 25s.</p>
       <h3>&#9790; Night &mdash; Click/ATK: attack &nbsp; SPACE: jump &nbsp; H: hide</h3>
       <p>Jump onto an assassin to ride it &mdash; it cannot hit you while you're on its back.</p>
+      <h3>&#128200; Difficulty</h3>
+      <p>Nights 1 and 2 are a warm-up. From night 3 onward every night is harder than the last &mdash; more assassins, and tougher, faster ones. It never stops climbing.</p>
       <h3>&#128100; Accounts &mdash; press ESC</h3>
       <p>Log in and death only costs $10: you keep your gear, your nights, and your PLGs and tamed Semi-Players. Guests lose everything.</p>
       <h3>&#128123; Mobs</h3>
@@ -1040,10 +1042,13 @@ const assassins=[];
 class Assassin{
   constructor(x,z){
     this.pos=new THREE.Vector3(x,0,z);
-    this.hp=14; this.maxHp=14;
+    const r=nightRamp();
+    this.hp=14+r*3; this.maxHp=this.hp;           // HP is uncapped: always harder
     this.alive=true; this.state='patrol'; this.stunT=0; this.atkCD=0;
     this.pAngle=Math.random()*Math.PI*2; this.pTimer=1+Math.random()*2;
-    this.spd=2.9+Math.random()*0.7;
+    this.spd=Math.min(2.9+r*0.06,4.0)+Math.random()*0.7;
+    this.atkEvery=Math.max(0.65,1.1-r*0.03);      // swings faster each night
+    this.detR=Math.min(DETECT_R+r*0.5,DETECT_R+8);// and notices you sooner
     this.distracted=false; this.mounted=false; this.buckT=0;
     this.nid=++NET_NID;
     this.mesh=new THREE.Mesh(ASN_GEO,M.mob);
@@ -1067,7 +1072,7 @@ class Assassin{
       const al=list[i];
       if(!al.alive) continue;
       if(Math.hypot(al.pos.x-this.pos.x,al.pos.z-this.pos.z)<1.3){
-        this.atkCD=1.1; al.hurt(2); return true;
+        this.atkCD=this.atkEvery; al.hurt(2); return true;
       }
     }
     return false;
@@ -1093,11 +1098,11 @@ class Assassin{
       } else this.patrol(dt);
       this.strikeAllies(); this.sync(); return;
     }
-    const detR=near.running?DETECT_R*1.8:DETECT_R;
+    const detR=near.running?this.detR*1.8:this.detR;
     if(near.d<detR||this.state==='chase'){
       this.state='chase';
       if(near.d>0.6) this.moveTo(near.x,near.z,this.spd*(near.running?1.45:1),dt);
-      if(near.d<ENEMY_ATK_R&&this.atkCD<=0){ this.atkCD=1.1; hurtTarget(near,1); }
+      if(near.d<ENEMY_ATK_R&&this.atkCD<=0){ this.atkCD=this.atkEvery; hurtTarget(near,1); }
     } else {
       this.patrol(dt);
     }
@@ -1707,14 +1712,25 @@ function switchFloor(){
   applyLighting();
 }
 
-// Nights ramp up hard: more waves, bigger waves.
+// Difficulty ramp. The first two nights are a fixed warm-up so a new player
+// gets a footing; from the third night on, every night is strictly harder
+// than the one before it - for ever. nightsSurvived is the count of nights
+// already completed, so it equals the 0-based index of the night being played.
+function nightRamp(n){
+  const k=(n===undefined?nightsSurvived:n);
+  return Math.max(0,k-1);      // 0 for nights 1 and 2, then 1,2,3,...
+}
+// Wave sizes grow with the ramp but are capped, so the escalation past the cap
+// comes from tougher assassins rather than an unplayable crowd of them.
 function genSchedule(n){
+  const r=nightRamp(n), cap=9;
+  const w=(base,per)=>Math.min(cap,base+Math.round(r*per));
   return [
-    {at:0,  count:3+Math.floor(n*0.8)},
-    {at:15, count:2+Math.floor(n*0.6)},
-    {at:32, count:2+Math.floor(n*0.7)},
-    {at:50, count:3+Math.floor(n*0.8)},
-    {at:68, count:2+Math.floor(n*0.9)},
+    {at:0,  count:w(3,1.0)},
+    {at:15, count:w(2,0.8)},
+    {at:32, count:w(2,0.9)},
+    {at:50, count:w(3,1.0)},
+    {at:68, count:w(2,1.1)},
   ];
 }
 // The hotel is huge, so assassins close in around the player rather than
@@ -1956,7 +1972,7 @@ function updatePhase(dt){
     phase='night'; phaseTime=NIGHT_DUR; nightElapsed=0; nightWarningTimer=5; lastCountdownSec=-1;
     snd.night(); applyLighting(); spawnSchedule=genSchedule(nightsSurvived);
     spawnGolemBeside(playerPos.x,playerPos.z);
-    spawnSemis(1+Math.floor(nightsSurvived/2));
+    spawnSemis(1+Math.floor(nightRamp()/2));
   }
   if(phase==='night'){
     nightElapsed+=dt;
@@ -2125,7 +2141,9 @@ function updateHUD(){
     '<span style="color:'+(hasGun?'#66ff66':'#ff5555')+';font-size:11px">Gun '+(hasGun?'OK':'$'+GUN_COST)+'</span> '+
     '<span style="color:'+(hasPurple?'#cc66ff':'#ff5555')+';font-size:11px">Purple '+(hasPurple?'OK':'$'+PURPLE_COST)+'</span> '+
     '<span style="color:'+(money>=SHIELD_COST?'#8fd0ff':'#ff5555')+';font-size:11px">Shield $'+SHIELD_COST+'</span><br>'+
-    '<span style="color:#555;font-size:11px">Nights: '+nightsSurvived+' &middot; PLG '+golems.length+' &middot; Semi '+tamedCount+'</span>';
+    '<span style="color:#555;font-size:11px">Nights: '+nightsSurvived+
+      ' &middot; <span style="color:'+(nightRamp()>0?'#ff7755':'#555')+'">Threat x'+(nightRamp()+1)+'</span>'+
+      ' &middot; PLG '+golems.length+' &middot; Semi '+tamedCount+'</span>';
   el('hb-weapon').textContent=hasGun?'GUN':hasSword?'SWORD':'unarmed';
   if(vmSword) vmSword.visible=hasSword&&!hasGun&&!mountedOn;
   if(vmGun) vmGun.visible=hasGun&&!mountedOn;
